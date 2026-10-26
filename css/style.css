@@ -1,0 +1,1078 @@
+    :root {
+      --bg-dalam: #12102B;
+      --bg-ungu: #2B1D5E;
+      --kaca: rgba(255, 255, 255, 0.14);
+      --kaca-garis: rgba(255, 255, 255, 0.28);
+      --teks: #FFFFFF;
+      --teks-redup: #CFCBEA;
+      --teks-gelap: #14112B;
+      --limau: #A3E635;
+      --hijau: #4ADE80;
+      --limau-gelap: #4D7C0F;
+      --cyan: #22D3EE;
+      --pink: #F472B6;
+      --oranye: #FB923C;
+      --kuning: #FACC15;
+      --benar: #4ADE80;
+      --salah: #FB7185;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg-dalam);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      color: var(--teks);
+      touch-action: none;
+    }
+
+    /* Kanvas 3D Utama */
+    #game-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      z-index: 1;
+    }
+
+    /* Lapisan Latar Menu (Gradien + Bulatan Cahaya Blur) */
+    #menu-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 2;
+      background: linear-gradient(160deg, rgba(18, 16, 43, 0.85) 0%, rgba(43, 29, 94, 0.55) 100%);
+      pointer-events: none;
+      transition: opacity 0.35s ease;
+      overflow: hidden;
+    }
+
+    #menu-backdrop.hidden {
+      opacity: 0;
+    }
+
+    .blur-orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(90px);
+      opacity: 0.24;
+      pointer-events: none;
+      animation: floatOrb 18s ease-in-out infinite alternate;
+    }
+    .orb-limau {
+      width: 380px;
+      height: 380px;
+      background: var(--limau);
+      top: -80px;
+      left: -80px;
+    }
+    .orb-cyan {
+      width: 420px;
+      height: 420px;
+      background: var(--cyan);
+      bottom: -100px;
+      right: -80px;
+      animation-delay: -6s;
+    }
+    .orb-pink {
+      width: 340px;
+      height: 340px;
+      background: var(--pink);
+      top: 40%;
+      left: 45%;
+      animation-delay: -12s;
+    }
+
+    @keyframes floatOrb {
+      0% { transform: translate(0, 0) scale(1); }
+      50% { transform: translate(40px, -30px) scale(1.08); }
+      100% { transform: translate(-30px, 35px) scale(0.95); }
+    }
+
+    /* Kontainer Layar UI */
+    .screen {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      overflow-y: auto;
+    }
+
+    .screen.active {
+      display: flex;
+      animation: screenEnter 0.32s cubic-bezier(.2, .9, .3, 1.2) forwards;
+    }
+
+    @keyframes screenEnter {
+      from {
+        opacity: 0;
+        transform: translateY(16px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Panel Kaca (Glassmorphism) */
+    .glass-panel {
+      background: var(--kaca);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid var(--kaca-garis);
+      border-radius: 24px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+      padding: 24px;
+      width: 100%;
+      max-width: 880px;
+      text-align: center;
+    }
+
+    /* Judul Utama */
+    .game-title {
+      font-family: 'Fredoka', sans-serif;
+      font-weight: 700;
+      font-size: clamp(2.5rem, 6vw, 4.4rem);
+      line-height: 1.08;
+      background: linear-gradient(90deg, var(--limau) 0%, var(--cyan) 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.45));
+      animation: titleFloat 3.2s ease-in-out infinite;
+      margin-bottom: 8px;
+    }
+
+    .screen-title {
+      font-family: 'Fredoka', sans-serif;
+      font-weight: 700;
+      font-size: clamp(1.75rem, 4vw, 2.6rem);
+      background: linear-gradient(90deg, var(--limau), var(--cyan));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.35));
+      margin-bottom: 6px;
+    }
+
+    .subtitle {
+      font-size: clamp(1rem, 2.2vw, 1.2rem);
+      color: var(--teks-redup);
+      font-weight: 600;
+      margin-bottom: 18px;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.4);
+    }
+
+    @keyframes titleFloat {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-8px); }
+    }
+
+    /* Tombol Utama Chunky & Sekunder Kaca */
+    .btn {
+      font-family: 'Fredoka', sans-serif;
+      font-weight: 700;
+      font-size: 22px;
+      min-height: 64px;
+      padding: 12px 28px;
+      border-radius: 18px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: transform 0.18s cubic-bezier(.2, .9, .3, 1.2), box-shadow 0.18s ease, opacity 0.2s ease;
+      border: none;
+      outline: none;
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background: linear-gradient(180deg, var(--limau) 0%, var(--hijau) 100%);
+      color: var(--teks-gelap);
+      box-shadow: 0 6px 0 var(--limau-gelap), 0 10px 24px rgba(163, 230, 53, 0.35);
+    }
+
+    .btn-primary:hover {
+      transform: scale(1.03);
+    }
+
+    .btn-primary:active {
+      transform: translateY(4px) scale(0.99);
+      box-shadow: 0 2px 0 var(--limau-gelap), 0 4px 12px rgba(163, 230, 53, 0.25);
+    }
+
+    .btn-secondary {
+      background: var(--kaca);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid var(--kaca-garis);
+      color: var(--teks);
+      box-shadow: 0 6px 0 rgba(0, 0, 0, 0.35), 0 8px 20px rgba(0, 0, 0, 0.25);
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+    }
+
+    .btn-secondary:hover {
+      transform: scale(1.03);
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-secondary:active {
+      transform: translateY(4px) scale(0.99);
+      box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+    }
+
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      justify-content: center;
+      margin-top: 18px;
+    }
+
+    /* Grid Kartu Pilihan */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      width: 100%;
+      margin: 12px 0;
+    }
+
+    @media (max-width: 720px) {
+      .cards-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+      .glass-panel {
+        padding: 16px;
+      }
+    }
+
+    .choice-card {
+      position: relative;
+      background: var(--kaca);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 2px solid var(--kaca-garis);
+      border-radius: 24px;
+      padding: 16px;
+      cursor: pointer;
+      opacity: 0.72;
+      transition: transform 0.25s cubic-bezier(.2, .9, .3, 1.2), opacity 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      animation: cardStagger 0.32s cubic-bezier(.2, .9, .3, 1.2) backwards;
+    }
+
+    .choice-card:nth-child(1) { animation-delay: 0.04s; }
+    .choice-card:nth-child(2) { animation-delay: 0.10s; }
+    .choice-card:nth-child(3) { animation-delay: 0.16s; }
+
+    @keyframes cardStagger {
+      from { opacity: 0; transform: translateY(16px) scale(0.95); }
+      to { opacity: 0.72; transform: translateY(0) scale(1); }
+    }
+
+    .choice-card:hover {
+      opacity: 0.92;
+      transform: scale(1.02);
+    }
+
+    .choice-card.selected {
+      opacity: 1;
+      transform: scale(1.05);
+      border: 3px solid transparent;
+      background:
+        linear-gradient(rgba(32, 26, 68, 0.78), rgba(32, 26, 68, 0.78)) padding-box,
+        linear-gradient(135deg, var(--limau), var(--cyan)) border-box;
+      box-shadow: 0 0 26px rgba(163, 230, 53, 0.45), 0 12px 36px rgba(0, 0, 0, 0.45);
+    }
+
+    .card-title {
+      font-family: 'Fredoka', sans-serif;
+      font-weight: 700;
+      font-size: 1.4rem;
+      color: var(--teks);
+      margin-top: 8px;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.4);
+    }
+
+    .card-desc {
+      font-size: 0.95rem;
+      color: var(--teks-redup);
+      margin-top: 4px;
+      font-weight: 600;
+    }
+
+    /* Kanvas Preview Karakter 3D */
+    .char-preview-canvas {
+      width: 140px;
+      height: 140px;
+      border-radius: 18px;
+      background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, rgba(0,0,0,0.12) 100%);
+      display: block;
+    }
+
+    @media (max-width: 720px) {
+      .choice-card {
+        flex-direction: row;
+        text-align: left;
+        gap: 14px;
+        padding: 12px 16px;
+        justify-content: flex-start;
+      }
+      .char-preview-canvas {
+        width: 86px;
+        height: 86px;
+        flex-shrink: 0;
+      }
+    }
+
+    /* Ikon Alat & Level */
+    .card-icon-box {
+      width: 84px;
+      height: 84px;
+      border-radius: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.6rem;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid var(--kaca-garis);
+      box-shadow: inset 0 2px 10px rgba(255,255,255,0.15);
+      flex-shrink: 0;
+    }
+
+    /* Badge Mode Pil */
+    .mode-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+      margin-top: 10px;
+    }
+
+    .mode-pill {
+      border-radius: 999px;
+      padding: 12px 24px;
+      min-height: 64px;
+      font-family: 'Fredoka', sans-serif;
+      font-weight: 700;
+      font-size: 20px;
+      color: var(--teks-gelap);
+      cursor: pointer;
+      border: 3px solid transparent;
+      opacity: 0.68;
+      transition: transform 0.22s cubic-bezier(.2, .9, .3, 1.2), opacity 0.22s ease, box-shadow 0.22s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .mode-pill.santai { background: var(--hijau); }
+    .mode-pill.sedang { background: var(--oranye); }
+    .mode-pill.seru   { background: var(--pink); }
+
+    .mode-pill.selected {
+      opacity: 1;
+      transform: scale(1.07);
+      border-color: #FFFFFF;
+      box-shadow: 0 0 24px rgba(255, 255, 255, 0.55), 0 8px 20px rgba(0,0,0,0.35);
+    }
+
+    /* Pilihan Topi Bonus */
+    .hat-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--kaca-garis);
+    }
+
+    .hat-btn {
+      font-family: 'Fredoka', sans-serif;
+      font-weight: 600;
+      font-size: 15px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.12);
+      border: 2px solid var(--kaca-garis);
+      color: var(--teks);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .hat-btn.selected {
+      background: var(--limau);
+      color: var(--teks-gelap);
+      border-color: #FFFFFF;
+      font-weight: 700;
+      transform: scale(1.05);
+    }
+
+    .hat-btn.locked {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* ==================== HUD SAAT MAIN ==================== */
+    #hud {
+      position: fixed;
+      inset: 0;
+      z-index: 8;
+      pointer-events: none;
+      display: none;
+    }
+
+    #hud.active {
+      display: block;
+    }
+
+    /* Baris Atas HUD */
+    .hud-top {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      right: 14px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    /* Kolom Kiri HUD: Bintang + Mini Map */
+    .hud-left-col {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: flex-start;
+      pointer-events: auto;
+    }
+
+    /* Pil Bintang Kiri Atas */
+    .star-pill {
+      background: var(--kaca);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid var(--kaca-garis);
+      border-radius: 999px;
+      padding: 8px 18px;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: 'Fredoka', sans-serif;
+      font-weight: 700;
+      font-size: 1.45rem;
+      color: var(--kuning);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+      text-shadow: 0 2px 4px rgba(0,0,0,0.45);
+      transition: transform 0.25s cubic-bezier(.2, .9, .3, 1.2);
+    }
+
+    .star-pill.bump {
+      transform: scale(1.3);
+    }
+
+    /* Mini Map Bulat Kaca (140px) */
+    .glass-minimap {
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      background: var(--kaca);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 2px solid var(--kaca-garis);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+    }
+
+    #minimap-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      border-radius: 50%;
+    }
+
+    /* Panel Misi Tengah Atas */
+    .mission-pill {
+      pointer-events: auto;
+      background: var(--kaca);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid var(--kaca-garis);
+      border-radius: 999px;
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      box-shadow: 0 12px 36px rgba(0,0,0,0.38);
+      flex-wrap: wrap;
+      max-width: min(92vw, 620px);
+    }
+
+    .mission-emoji {
+      font-size: 2.3rem;
+      line-height: 1;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.35));
+      margin-right: 4px;
+    }
+
+    .tiles-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .letter-tile {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Fredoka', sans-serif;
+      font-weight: 700;
+      font-size: 1.85rem;
+      color: rgba(255, 255, 255, 0.3);
+      border: 2px dashed rgba(255, 255, 255, 0.45);
+      background: rgba(255, 255, 255, 0.06);
+      transition: all 0.25s cubic-bezier(.2, .9, .3, 1.2);
+      position: relative;
+    }
+
+    .letter-tile.next-target {
+      color: rgba(255, 255, 255, 0.72);
+      border: 3px solid var(--limau);
+      background: rgba(163, 230, 53, 0.16);
+      animation: pulseTile 1.3s ease-in-out infinite;
+    }
+
+    @keyframes pulseTile {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(163, 230, 53, 0.65), 0 0 16px rgba(163, 230, 53, 0.55);
+        transform: scale(1);
+      }
+      50% {
+        box-shadow: 0 0 0 8px rgba(163, 230, 53, 0), 0 0 24px rgba(163, 230, 53, 0.9);
+        transform: scale(1.06);
+      }
+    }
+
+    .letter-tile.filled {
+      color: var(--teks-gelap);
+      border: 2px solid #FFFFFF;
+      text-shadow: none;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.3);
+    }
+
+    .letter-tile.filled.color-0 { background: linear-gradient(135deg, var(--limau), var(--hijau)); }
+    .letter-tile.filled.color-1 { background: linear-gradient(135deg, var(--cyan), #38BDF8); }
+    .letter-tile.filled.color-2 { background: linear-gradient(135deg, var(--pink), #FB7185); }
+    .letter-tile.filled.color-3 { background: linear-gradient(135deg, var(--oranye), var(--kuning)); }
+
+    .letter-tile.pop-anim {
+      animation: tilePop 0.42s cubic-bezier(.2, .9, .3, 1.4);
+    }
+
+    @keyframes tilePop {
+      0% { transform: scale(0.6); }
+      55% { transform: scale(1.32); }
+      100% { transform: scale(1); }
+    }
+
+    /* Tombol Bulat HUD Kanan Atas & Speaker */
+    .hud-right-btns {
+      display: flex;
+      gap: 10px;
+      pointer-events: auto;
+    }
+
+    .round-glass-btn {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: var(--kaca);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid var(--kaca-garis);
+      color: var(--teks);
+      font-size: 1.4rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.3);
+      transition: transform 0.15s ease, background 0.15s ease;
+    }
+
+    .round-glass-btn:hover {
+      transform: scale(1.07);
+      background: rgba(255,255,255,0.22);
+    }
+
+    .round-glass-btn:active {
+      transform: scale(0.93);
+    }
+
+    /* Menu Kecil Pilihan Kamera (Glass Arcade) */
+    .cam-menu-popup {
+      position: fixed;
+      top: 74px;
+      right: 18px;
+      width: 250px;
+      background: rgba(20, 16, 45, 0.88);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 2px solid var(--kaca-garis);
+      border-radius: 22px;
+      padding: 14px;
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      z-index: 18;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.55);
+      animation: popupEnter 0.22s cubic-bezier(.2, .9, .3, 1.2) forwards;
+      pointer-events: auto;
+    }
+
+    .cam-menu-popup.open {
+      display: flex;
+    }
+
+    .cam-menu-header {
+      font-family: 'Fredoka', sans-serif;
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: var(--limau);
+      text-align: center;
+      border-bottom: 1px solid var(--kaca-garis);
+      padding-bottom: 6px;
+    }
+
+    .cam-mode-btn {
+      background: rgba(255,255,255,0.08);
+      border: 2px solid var(--kaca-garis);
+      border-radius: 14px;
+      padding: 10px 12px;
+      color: var(--teks);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: left;
+    }
+
+    .cam-mode-btn:hover {
+      background: rgba(255,255,255,0.18);
+      transform: scale(1.02);
+    }
+
+    .cam-mode-btn.active {
+      border: 2px solid transparent;
+      background:
+        linear-gradient(rgba(32, 26, 68, 0.9), rgba(32, 26, 68, 0.9)) padding-box,
+        linear-gradient(135deg, var(--limau), var(--cyan)) border-box;
+      box-shadow: 0 0 18px rgba(163, 230, 53, 0.45);
+      transform: scale(1.03);
+    }
+
+    .cam-mode-btn .cam-btn-icon {
+      font-size: 1.5rem;
+      line-height: 1;
+    }
+
+    .cam-mode-btn .cam-btn-text {
+      font-family: 'Fredoka', sans-serif;
+      font-weight: 700;
+      font-size: 1rem;
+    }
+
+    .cam-mode-btn .cam-btn-sub {
+      font-size: 0.76rem;
+      color: var(--teks-redup);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+
+    .cam-reset-btn {
+      background: rgba(255,255,255,0.12);
+      border: 1px solid var(--kaca-garis);
+      border-radius: 12px;
+      color: var(--teks);
+      font-family: 'Fredoka', sans-serif;
+      font-size: 0.92rem;
+      font-weight: 700;
+      padding: 8px 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .cam-reset-btn:hover {
+      background: rgba(255,255,255,0.22);
+    }
+
+    /* Indikator Ronde Kecil di Bawah Misi */
+    .round-progress-text {
+      width: 100%;
+      text-align: center;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--teks-redup);
+      margin-top: 2px;
+    }
+
+    /* Toast Pesan Ramah Anak & Perayaan Target */
+    #toast-msg {
+      position: fixed;
+      top: 126px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-10px);
+      background: rgba(20, 17, 43, 0.88);
+      backdrop-filter: blur(12px);
+      border: 2px solid var(--limau);
+      border-radius: 999px;
+      padding: 10px 24px;
+      font-family: 'Fredoka', sans-serif;
+      font-weight: 700;
+      font-size: 1.25rem;
+      color: var(--teks);
+      z-index: 25;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      white-space: nowrap;
+    }
+
+    #toast-msg.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    #center-celebration {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.4);
+      z-index: 20;
+      pointer-events: none;
+      opacity: 0;
+      transition: transform 0.35s cubic-bezier(.2, .9, .3, 1.3), opacity 0.3s ease;
+      text-align: center;
+      background: var(--kaca);
+      backdrop-filter: blur(18px);
+      border: 3px solid var(--limau);
+      border-radius: 32px;
+      padding: 24px 40px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.55);
+    }
+
+    #center-celebration.show {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    #center-celebration .big-emoji {
+      font-size: 5.5rem;
+      line-height: 1.1;
+      display: block;
+    }
+
+    #center-celebration .big-word {
+      font-family: 'Fredoka', sans-serif;
+      font-weight: 700;
+      font-size: 2.8rem;
+      color: var(--limau);
+      text-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    }
+
+    /* Huruf Terbang ke Panel Misi */
+    .flying-letter {
+      position: fixed;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--limau), var(--cyan));
+      border: 3px solid #FFFFFF;
+      color: var(--teks-gelap);
+      font-family: 'Fredoka', sans-serif;
+      font-weight: 700;
+      font-size: 1.9rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 25;
+      pointer-events: none;
+      box-shadow: 0 10px 25px rgba(163, 230, 53, 0.6);
+      transition: left 0.55s cubic-bezier(.2, .85, .3, 1.1), top 0.55s cubic-bezier(.2, .85, .3, 1.1), transform 0.55s ease;
+    }
+
+    /* ==================== KONTROL SENTUH & AKSI ==================== */
+    #touch-controls {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9;
+    }
+
+    /* Joystick Virtual Kiri Bawah */
+    #joystick-zone {
+      position: absolute;
+      bottom: 26px;
+      left: 26px;
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      background: var(--kaca);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 2px solid var(--kaca-garis);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+      pointer-events: auto;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      touch-action: none;
+    }
+
+    #joystick-knob {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      background: linear-gradient(180deg, var(--limau), var(--hijau));
+      border: 3px solid #FFFFFF;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+      pointer-events: none;
+      transform: translate(0px, 0px);
+    }
+
+    /* Tombol Tembak & Lompat Kanan Bawah */
+    .action-buttons {
+      position: absolute;
+      bottom: 26px;
+      right: 26px;
+      display: flex;
+      align-items: flex-end;
+      gap: 16px;
+      pointer-events: auto;
+    }
+
+    #btn-jump {
+      width: 78px;
+      height: 78px;
+      border-radius: 50%;
+      background: var(--kaca);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 2px solid var(--kaca-garis);
+      color: var(--teks);
+      font-family: 'Fredoka', sans-serif;
+      font-weight: 700;
+      font-size: 1rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+      touch-action: none;
+    }
+
+    #btn-jump:active {
+      transform: scale(0.92);
+      background: rgba(255,255,255,0.28);
+    }
+
+    #btn-shoot {
+      width: 104px;
+      height: 104px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--pink) 0%, var(--oranye) 100%);
+      border: 4px solid #FFFFFF;
+      color: var(--teks);
+      font-family: 'Fredoka', sans-serif;
+      font-weight: 700;
+      font-size: 1.05rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 8px 0 #9D174D, 0 12px 30px rgba(244, 114, 182, 0.5);
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+      touch-action: none;
+    }
+
+    #btn-shoot .tool-emoji {
+      font-size: 2.3rem;
+      line-height: 1.05;
+    }
+
+    #btn-shoot.in-range {
+      animation: shootPulse 0.9s ease-in-out infinite;
+    }
+
+    @keyframes shootPulse {
+      0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 8px 0 #9D174D, 0 0 0 0 rgba(251, 146, 60, 0.7);
+      }
+      50% {
+        transform: scale(1.08);
+        box-shadow: 0 8px 0 #9D174D, 0 0 0 14px rgba(251, 146, 60, 0);
+      }
+    }
+
+    #btn-shoot:active {
+      transform: translateY(4px) scale(0.95) !important;
+      box-shadow: 0 3px 0 #9D174D, 0 6px 15px rgba(244, 114, 182, 0.4) !important;
+    }
+
+    /* Petunjuk Keyboard di Laptop */
+    .desktop-hint {
+      position: fixed;
+      bottom: 14px;
+      left: 24px;
+      background: rgba(18, 16, 43, 0.65);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--kaca-garis);
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-size: 0.9rem;
+      color: var(--teks-redup);
+      font-weight: 600;
+      pointer-events: none;
+    }
+
+    /* Indikator Geser Kamera Halus */
+    #cam-drag-zone-hint {
+      position: fixed;
+      top: 78px;
+      right: 16px;
+      background: rgba(18, 16, 43, 0.65);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--kaca-garis);
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      color: var(--teks-redup);
+      font-weight: 600;
+      pointer-events: none;
+      z-index: 8;
+    }
+
+    /* Layar Ronde Selesai */
+    .end-stars-row {
+      display: flex;
+      justify-content: center;
+      gap: 18px;
+      margin: 18px 0;
+    }
+
+    .big-end-star {
+      font-size: 4.2rem;
+      opacity: 0;
+      transform: scale(0.2) rotate(-25deg);
+      transition: all 0.45s cubic-bezier(.2, .9, .3, 1.4);
+      filter: drop-shadow(0 8px 20px rgba(250, 204, 21, 0.55));
+    }
+
+    .big-end-star.show {
+      opacity: 1;
+      transform: scale(1) rotate(0deg);
+    }
+
+    /* Album Hewan Grid */
+    .album-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    @media (max-width: 640px) {
+      .album-grid {
+        grid-template-columns: 1fr;
+      }
+      .mission-pill {
+        padding: 8px 12px;
+      }
+      .letter-tile {
+        width: 48px;
+        height: 48px;
+        font-size: 1.5rem;
+      }
+      .hud-top {
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      .desktop-hint {
+        display: none;
+      }
+    }
+
+    .album-card {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid var(--kaca-garis);
+      border-radius: 20px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .album-emoji {
+      font-size: 3.4rem;
+    }
+
+    .album-count-badge {
+      background: var(--limau);
+      color: var(--teks-gelap);
+      font-family: 'Fredoka', sans-serif;
+      font-weight: 700;
+      padding: 4px 14px;
+      border-radius: 999px;
+      font-size: 1rem;
+    }
+
+    /* Hormati prefers-reduced-motion */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }

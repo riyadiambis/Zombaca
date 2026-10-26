@@ -225,6 +225,11 @@ function animate() {
   }
 
   /**************** STATE BERMAIN (PLAYING) ****************/
+  if (gameStateRef.isPaused) {
+    renderer.render(scene, camera);
+    return;
+  }
+
   if (playerState.shootCooldown > 0) playerState.shootCooldown -= dt;
   if (playerState.toolSwingTimer > 0) playerState.toolSwingTimer -= dt;
   if (screenState.shakeTime > 0) screenState.shakeTime -= dt;

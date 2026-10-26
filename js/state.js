@@ -42,16 +42,38 @@ export function saveProgress() {
 // Muat data saat modul diinisialisasi
 loadProgress();
 
+// Kunci penyimpanan terpisah untuk preferensi jumlah target (agar tidak menimpa save progress utama)
+export const TARGET_COUNT_KEY = 'zombaca_target_count_v1';
+
+export function loadTargetCount() {
+  try {
+    const raw = localStorage.getItem(TARGET_COUNT_KEY);
+    if (raw) {
+      const val = parseInt(raw, 10);
+      if (val >= 3 && val <= 20) return val;
+    }
+  } catch (err) {}
+  return 5; // Bawaan pertama kali: 5
+}
+
+export function saveTargetCount(count) {
+  try {
+    localStorage.setItem(TARGET_COUNT_KEY, count.toString());
+  } catch (err) {}
+}
+
 // 2. State Game Alur Permainan
 export const gameStateRef = {
-  current: 'MENU' // 'MENU' | 'PLAYING' | 'ROUND_END'
+  current: 'MENU', // 'MENU' | 'PLAYING' | 'ROUND_END'
+  isPaused: false
 };
 
 export const selectionState = {
   char: 'bima',
   tool: 'bubble',
   level: 1,
-  mode: 'santai'
+  mode: 'santai',
+  targetCount: loadTargetCount()
 };
 
 // 3. State Pemain (Posisi, Gerak, Fisika, Aksi)
@@ -103,6 +125,7 @@ export const camControl = {
 // 6. State Target & Ronde
 export const roundState = {
   targets: [],
+  completedTargets: [],
   targetIndex: 0,
   targetObj: null,
   letterIndex: 0,

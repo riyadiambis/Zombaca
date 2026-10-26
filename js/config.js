@@ -10,6 +10,16 @@ export const LETTER_PHONETICS = {
   n: "en", d: "de", g: "ge", c: "ce", z: "zet"
 };
 
+const CONSONANTS = ['B', 'M', 'S', 'T', 'L', 'N', 'D', 'G', 'C', 'Z'];
+const VOWELS = ['A', 'I', 'U', 'E', 'O'];
+
+const LEVEL_2_SYLLABLES = [];
+for (const c of CONSONANTS) {
+  for (const v of VOWELS) {
+    LEVEL_2_SYLLABLES.push({ text: c + v, emoji: "" });
+  }
+}
+
 export const LEVEL_DATA = {
   1: [
     { text: "A", emoji: "" },
@@ -18,16 +28,7 @@ export const LEVEL_DATA = {
     { text: "E", emoji: "" },
     { text: "O", emoji: "" }
   ],
-  2: [
-    { text: "BA", emoji: "" }, { text: "BO", emoji: "" },
-    { text: "MA", emoji: "" }, { text: "MI", emoji: "" },
-    { text: "SU", emoji: "" }, { text: "SA", emoji: "" },
-    { text: "TE", emoji: "" }, { text: "TI", emoji: "" },
-    { text: "LA", emoji: "" }, { text: "LU", emoji: "" },
-    { text: "NA", emoji: "" }, { text: "DA", emoji: "" },
-    { text: "DU", emoji: "" }, { text: "GI", emoji: "" },
-    { text: "GO", emoji: "" }
-  ],
+  2: LEVEL_2_SYLLABLES,
   3: [
     { text: "BOLA", emoji: "⚽" },
     { text: "SUSU", emoji: "🥛" },
@@ -38,7 +39,17 @@ export const LEVEL_DATA = {
     { text: "GIGI", emoji: "🦷" },
     { text: "DADU", emoji: "🎲" },
     { text: "TALI", emoji: "🪢" },
-    { text: "NASI", emoji: "🍚" }
+    { text: "NASI", emoji: "🍚" },
+    { text: "DASI", emoji: "👔" },
+    { text: "SOTO", emoji: "🍜" },
+    { text: "BOLU", emoji: "🍰" },
+    { text: "LAUT", emoji: "🌊" },
+    { text: "BULU", emoji: "🪶" },
+    { text: "TOGA", emoji: "🎓" },
+    { text: "CABE", emoji: "🌶️" },
+    { text: "DAUN", emoji: "🍃" },
+    { text: "LIMA", emoji: "🖐️" },
+    { text: "BATA", emoji: "🧱" }
   ]
 };
 

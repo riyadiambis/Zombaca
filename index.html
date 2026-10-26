@@ -172,6 +172,33 @@
         <button class="mode-pill seru" data-mode="seru">⚡ Seru (16 Zombie)</button>
       </div>
 
+      <!-- Pilihan Jumlah Target 3 - 20 -->
+      <div class="target-count-section">
+        <p class="subtitle" style="margin-top: 14px; margin-bottom: 8px;">Jumlah Target Ronde:</p>
+        <div class="target-stepper-container">
+          <button id="btn-target-minus" class="stepper-btn" aria-label="Kurangi Target">−</button>
+          <div class="stepper-display">
+            <span id="target-count-number" class="stepper-number">5</span>
+            <span class="stepper-label">Target</span>
+          </div>
+          <button id="btn-target-plus" class="stepper-btn" aria-label="Tambah Target">+</button>
+        </div>
+
+        <!-- Chip Pilihan Cepat -->
+        <div class="quick-target-chips" id="quick-target-chips">
+          <button class="target-chip" data-count="3">3</button>
+          <button class="target-chip selected" data-count="5">5</button>
+          <button class="target-chip" data-count="10">10</button>
+          <button class="target-chip" data-count="15">15</button>
+          <button class="target-chip" data-count="20">20</button>
+        </div>
+
+        <!-- Perkiraan Waktu Bermain -->
+        <div class="playtime-estimate" id="playtime-estimate">
+          ⏱️ Perkiraan Waktu: <strong id="playtime-text">± 2.5 menit</strong>
+        </div>
+      </div>
+
       <div class="btn-row">
         <button id="btn-back-tool" class="btn btn-secondary">⬅️ Kembali</button>
         <button id="btn-start-play" class="btn btn-primary" style="font-size: 24px; padding: 14px 36px;">🎮 Ayo Main!</button>
@@ -198,7 +225,12 @@
         <span id="mission-emoji" class="mission-emoji" style="display:none;">⚽</span>
         <div id="mission-tiles" class="tiles-container"></div>
         <button id="btn-repeat-voice" class="round-glass-btn" style="width:46px; height:46px; font-size:1.25rem;" title="Ulangi Suara">🔊</button>
-        <div class="round-progress-text" id="round-progress-text">Target 1 dari 3</div>
+        <div class="round-progress-wrapper">
+          <div class="round-progress-text" id="round-progress-text">Target 1 dari 5</div>
+          <div class="mission-progress-track">
+            <div class="mission-progress-bar" id="mission-progress-bar"></div>
+          </div>
+        </div>
       </div>
 
       <!-- Tombol Kamera, Musik & Rumah Kanan Atas -->
@@ -282,6 +314,14 @@
         </p>
       </div>
 
+      <!-- Daftar Target yang Selesai Disusun -->
+      <div class="completed-targets-container">
+        <div class="completed-targets-header">🎯 Target yang Berhasil Disusun:</div>
+        <div class="completed-targets-grid" id="end-completed-targets">
+          <!-- Diisi dinamis oleh JavaScript -->
+        </div>
+      </div>
+
       <div class="btn-row">
         <button id="btn-end-menu" class="btn btn-secondary">🏠 Menu</button>
         <button id="btn-end-again" class="btn btn-primary">🔄 Main Lagi</button>
@@ -321,6 +361,19 @@
       </div>
     </div>
   </section>
+
+  <!-- 8. MODAL KONFIRMASI JEDA KELUAR PERMAINAN -->
+  <div id="modal-confirm-exit" class="confirm-modal-overlay">
+    <div class="glass-panel confirm-panel">
+      <div class="confirm-emoji">🏠</div>
+      <h3 class="confirm-title">Mau berhenti main?</h3>
+      <p class="confirm-subtitle">Progres ronde yang sedang berjalan tidak akan tersimpan.</p>
+      <div class="confirm-btn-row">
+        <button id="btn-confirm-stay" class="btn btn-primary">Lanjut ▶️</button>
+        <button id="btn-confirm-leave" class="btn btn-secondary">Ya 🚪</button>
+      </div>
+    </div>
+  </div>
 
 
   <!-- Main Game Entry Point as ES Module -->

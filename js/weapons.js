@@ -157,7 +157,11 @@ import {
           saveProgress();
           updateStarHUD(true);
 
-          // Ucapan lengkap
+          // Rekam target yang selesai
+          if (!roundState.completedTargets) roundState.completedTargets = [];
+          roundState.completedTargets.push(roundState.targetObj);
+
+          // Ucapan lengkap fonik/kata
           if (roundState.targetObj.text.length === 4) {
             const syl1 = fullTextLower.slice(0, 2);
             const syl2 = fullTextLower.slice(2, 4);
@@ -166,6 +170,17 @@ import {
             speakText(`${letterSpoken}... ${fullTextLower}! Hebat! ${fullTextLower}!`);
           } else {
             speakText(`${letterSpoken}! Hebat! Huruf ${letterSpoken}!`);
+          }
+
+          // Perayaan kecil setiap kelipatan 5 target selesai (kalau total target N > 5)
+          const completedCount = roundState.targetIndex + 1;
+          const totalTargets = roundState.targets.length;
+          if (totalTargets > 5 && completedCount % 5 === 0 && completedCount < totalTargets) {
+            setTimeout(() => {
+              showToast(`🎉 Hebat! Sudah ${completedCount}!`);
+              speakText(`Hebat! Sudah ${completedCount}!`);
+              spawnConfettiBurst();
+            }, 1200);
           }
 
           // Tampilkan Emoji / Kata Besar Sebentar di Tengah Layar

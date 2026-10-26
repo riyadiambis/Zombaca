@@ -3,7 +3,7 @@
  *************************************************************************/
 import { LEVEL_DATA, MODE_CONFIG, TOOL_CONFIG, MAZE, ZONES, RIVER_HALF, LAKE } from './config.js';
 import {
-  saveState, saveProgress, roundState, playerState, selectionState,
+  saveState, saveProgress, saveTargetCount, roundState, playerState, selectionState,
   gameStateRef, cameraState, camControl, totalTimeRef, sceneRefs,
   playerRescue, zombies
 } from './state.js';
@@ -231,19 +231,74 @@ let miniMapBgCanvas = null;
     /*************************************************************************
      * 13. INTI PERMAINAN: TARGET, UBIN HURUF, SUARA, DAN BANTUAN OTOMATIS
      *************************************************************************/
-    export function pickRoundTargets(level) {
-      const pool = [...LEVEL_DATA[level]];
-      for (let i = pool.length - 1; i > 0; i--) {
+    export function shuffleDeck(arr) {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        [pool[i], pool[j]] = [pool[j], pool[i]];
+        [a[i], a[j]] = [a[j], a[i]];
       }
-      return pool.slice(0, 3);
+      return a;
+    }
+
+    export function pickRoundTargets(level, count = 5) {
+      const pool = LEVEL_DATA[level];
+      if (!pool || pool.length === 0) return [];
+
+      const result = [];
+      let lastText = null;
+
+      while (result.length < count) {
+        let deck = shuffleDeck(pool);
+        // Cegah elemen pertama deck sama dengan target terakhir dari kocokan sebelumnya
+        if (lastText && deck.length > 1 && deck[0].text === lastText) {
+          const swapIdx = 1 + Math.floor(Math.random() * (deck.length - 1));
+          [deck[0], deck[swapIdx]] = [deck[swapIdx], deck[0]];
+        }
+
+        for (let i = 0; i < deck.length && result.length < count; i++) {
+          result.push(deck[i]);
+          lastText = deck[i].text;
+        }
+      }
+
+      return result;
+    }
+
+    export function updateTargetCountUI() {
+      const count = selectionState.targetCount;
+      const numEl = document.getElementById('target-count-number');
+      if (numEl) numEl.textContent = count;
+
+      document.querySelectorAll('#quick-target-chips .target-chip').forEach(chip => {
+        const val = parseInt(chip.dataset.count, 10);
+        chip.classList.toggle('selected', val === count);
+      });
+
+      updatePlaytimeEstimate();
+    }
+
+    export function updatePlaytimeEstimate() {
+      const level = selectionState.level;
+      const count = selectionState.targetCount;
+      const secPerTarget = level === 1 ? 30 : (level === 2 ? 45 : 90);
+      const totalSec = count * secPerTarget;
+      const mins = totalSec / 60;
+      let text = '';
+      if (mins < 1) {
+        text = `± ${totalSec} detik`;
+      } else {
+        const formatted = (mins % 1 === 0) ? mins : mins.toFixed(1);
+        text = `± ${formatted} menit`;
+      }
+      const el = document.getElementById('playtime-text');
+      if (el) el.textContent = text;
     }
 
     export function renderMissionHUD() {
       const emojiEl = document.getElementById('mission-emoji');
       const tilesEl = document.getElementById('mission-tiles');
       const progEl = document.getElementById('round-progress-text');
+      const progressBarEl = document.getElementById('mission-progress-bar');
 
       if (!roundState.targetObj) return;
 
@@ -269,7 +324,14 @@ let miniMapBgCanvas = null;
         tilesEl.appendChild(tile);
       });
 
-      progEl.textContent = `Target ${roundState.targetIndex + 1} dari 3`;
+      const totalTargets = roundState.targets.length || 1;
+      if (progEl) {
+        progEl.textContent = `Target ${roundState.targetIndex + 1} dari ${totalTargets}`;
+      }
+      if (progressBarEl) {
+        const progressPct = ((roundState.targetIndex) / totalTargets) * 100;
+        progressBarEl.style.width = `${progressPct}%`;
+      }
     }
 
     export function announceCurrentTarget() {
@@ -429,7 +491,8 @@ export     const screens = {
       updateStarHUD(false);
 
       roundState.animalsRescued = 0;
-      roundState.targets = pickRoundTargets(selectionState.level);
+      roundState.completedTargets = [];
+      roundState.targets = pickRoundTargets(selectionState.level, selectionState.targetCount);
       roundState.targetIndex = 0;
       roundState.targetObj = roundState.targets[0];
       roundState.letterIndex = 0;
@@ -451,7 +514,33 @@ export     const screens = {
       const savedEl = document.getElementById('end-animals-saved');
       const starsEl = document.getElementById('end-total-stars');
       if (savedEl) savedEl.textContent = roundState.animalsRescued;
-      if (starsEl) starsEl.textContent = `${saveState.stars} ⭐`;
+      if (starsEl) starsEl.textContent = `${saveState.stars} ⭐ (+${roundState.targets.length} ⭐ di ronde ini)`;
+
+      // Render daftar target yang telah diselesaikan ke dalam grid kartu kaca
+      const gridEl = document.getElementById('end-completed-targets');
+      if (gridEl) {
+        gridEl.innerHTML = '';
+        const listToRender = (roundState.completedTargets && roundState.completedTargets.length > 0)
+          ? roundState.completedTargets
+          : roundState.targets;
+        listToRender.forEach((t) => {
+          const card = document.createElement('div');
+          card.className = 'completed-target-card';
+          if (t.emoji) {
+            const em = document.createElement('span');
+            em.className = 'target-emoji';
+            em.textContent = t.emoji;
+            card.appendChild(em);
+          }
+          const txt = document.createElement('span');
+          txt.textContent = t.text;
+          card.appendChild(txt);
+          gridEl.appendChild(card);
+        });
+      }
+
+      const progressBarEl = document.getElementById('mission-progress-bar');
+      if (progressBarEl) progressBarEl.style.width = '100%';
 
       const s1 = document.getElementById('end-star-1');
       const s2 = document.getElementById('end-star-2');
@@ -644,6 +733,44 @@ export function initUI() {
         document.querySelectorAll('#level-cards .choice-card').forEach(c => c.classList.remove('selected'));
         card.classList.add('selected');
         selectionState.level = parseInt(card.dataset.level, 10);
+        updatePlaytimeEstimate();
+      });
+    });
+
+    // Pilihan Jumlah Target (Stepper − / + dan Chip Cepat)
+    const btnTargetMinus = document.getElementById('btn-target-minus');
+    if (btnTargetMinus) {
+      btnTargetMinus.addEventListener('click', () => {
+        playSound('click');
+        if (selectionState.targetCount > 3) {
+          selectionState.targetCount--;
+          saveTargetCount(selectionState.targetCount);
+          updateTargetCountUI();
+        }
+      });
+    }
+
+    const btnTargetPlus = document.getElementById('btn-target-plus');
+    if (btnTargetPlus) {
+      btnTargetPlus.addEventListener('click', () => {
+        playSound('click');
+        if (selectionState.targetCount < 20) {
+          selectionState.targetCount++;
+          saveTargetCount(selectionState.targetCount);
+          updateTargetCountUI();
+        }
+      });
+    }
+
+    document.querySelectorAll('#quick-target-chips .target-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        playSound('click');
+        const count = parseInt(chip.dataset.count, 10);
+        if (count >= 3 && count <= 20) {
+          selectionState.targetCount = count;
+          saveTargetCount(count);
+          updateTargetCountUI();
+        }
       });
     });
 
@@ -705,12 +832,41 @@ export function initUI() {
     const btnToggleMusicMenu = document.getElementById('btn-toggle-music-menu');
     if (btnToggleMusicMenu) btnToggleMusicMenu.addEventListener('click', toggleMusic);
 
+    // Tombol Rumah HUD & Modal Konfirmasi Berhenti Main
+    const modalConfirm = document.getElementById('modal-confirm-exit');
+    const btnConfirmStay = document.getElementById('btn-confirm-stay');
+    const btnConfirmLeave = document.getElementById('btn-confirm-leave');
+
     const btnHudHome = document.getElementById('btn-hud-home');
     if (btnHudHome) {
       btnHudHome.addEventListener('click', () => {
         playSound('click');
+        if (gameStateRef.current === 'PLAYING') {
+          gameStateRef.isPaused = true;
+          if (modalConfirm) modalConfirm.classList.add('show');
+        } else {
+          returnToMainMenu();
+        }
+      });
+    }
+
+    if (btnConfirmStay) {
+      btnConfirmStay.addEventListener('click', () => {
+        playSound('click');
+        gameStateRef.isPaused = false;
+        if (modalConfirm) modalConfirm.classList.remove('show');
+      });
+    }
+
+    if (btnConfirmLeave) {
+      btnConfirmLeave.addEventListener('click', () => {
+        playSound('click');
+        gameStateRef.isPaused = false;
+        if (modalConfirm) modalConfirm.classList.remove('show');
         returnToMainMenu();
       });
     }
 
+    // Inisialisasi tampilan target count awal dari penyimpanan
+    updateTargetCountUI();
 }

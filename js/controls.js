@@ -35,8 +35,20 @@ export function isTouchOnUIButton(target) {
   );
 }
 
+// HP / tablet: jari adalah penunjuk utama. Laptop layar sentuh (ada mouse/touchpad)
+// tidak dihitung, supaya tidak masuk layar penuh atau muncul ajakan putar layar.
+export function isTouchFirstDevice() {
+  try {
+    if (window.matchMedia) return window.matchMedia('(pointer: coarse)').matches;
+  } catch (e) {}
+  return 'ontouchstart' in window;
+}
+
 export function enableTouchUI() {
+  if (document.body.classList.contains('touch-device')) return;
   document.body.classList.add('touch-device');
+  const joystickZone = document.getElementById('joystick-zone');
+  if (joystickZone) joystickZone.style.display = 'flex';
   const hint = document.getElementById('desktop-hint');
   if (hint) hint.style.display = 'none';
 }
@@ -61,8 +73,7 @@ export function toggleFullscreen() {
 }
 
 export function tryFullscreenAndLockLandscape() {
-  const isTouch = ('ontouchstart' in window || navigator.maxTouchPoints > 0);
-  if (!isTouch) return;
+  if (!isTouchFirstDevice()) return;
   try {
     if (!document.fullscreenElement && !document.webkitFullscreenElement) {
       const el = document.documentElement;
@@ -78,7 +89,9 @@ export function tryFullscreenAndLockLandscape() {
   } catch (e) {}
 }
 
-// Handler Joystick Mengambang Dinamis
+// Joystick Mengambang: diam di kiri bawah, pindah ke titik jari saat disentuh
+let joyMaxR = 50;
+
 export function handleFloatingJoyStart(touch) {
   touchState.joyTouchId = touch.identifier;
   touchState.joyOriginX = touch.clientX;
@@ -87,10 +100,12 @@ export function handleFloatingJoyStart(touch) {
   const joystickZone = document.getElementById('joystick-zone');
   const joystickKnob = document.getElementById('joystick-knob');
   if (joystickZone && joystickKnob) {
+    joystickZone.classList.add('floating');
     joystickZone.style.left = `${touch.clientX}px`;
     joystickZone.style.top = `${touch.clientY}px`;
     joystickZone.style.display = 'flex';
     joystickKnob.style.transform = 'translate(0px, 0px)';
+    joyMaxR = (joystickZone.offsetWidth || 140) * 0.36;
   }
   joyVector.x = 0;
   joyVector.y = 0;
@@ -100,7 +115,7 @@ export function handleFloatingJoyMove(touch) {
   const joystickKnob = document.getElementById('joystick-knob');
   if (!joystickKnob) return;
 
-  const maxR = 46; // radius gerak knob di dalam zona 120px
+  const maxR = joyMaxR;
   let dx = touch.clientX - touchState.joyOriginX;
   let dy = touch.clientY - touchState.joyOriginY;
   const dist = Math.hypot(dx, dy);
@@ -121,9 +136,14 @@ export function handleFloatingJoyEnd(identifier) {
     joyVector.x = 0;
     joyVector.y = 0;
 
+    // Kembali ke tempat diam di kiri bawah
     const joystickZone = document.getElementById('joystick-zone');
     const joystickKnob = document.getElementById('joystick-knob');
-    if (joystickZone) joystickZone.style.display = 'none';
+    if (joystickZone) {
+      joystickZone.classList.remove('floating');
+      joystickZone.style.left = '';
+      joystickZone.style.top = '';
+    }
     if (joystickKnob) joystickKnob.style.transform = 'translate(0px, 0px)';
   }
 }
@@ -200,8 +220,11 @@ export function initControls() {
     camControl.idleTimer = 0;
   }, { passive: true });
 
-  // Cegah menu tekan lama (contextmenu) di seluruh layar game
+  // Cegah menu tekan lama (contextmenu) dan zoom cubit di Safari iOS
   window.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+  });
+  document.addEventListener('gesturestart', (e) => {
     e.preventDefault();
   });
 

@@ -16,7 +16,7 @@ import {
   getNeededLetter, clearAllZombies, spawnZombie,
   ensureCorrectLetterAmongZombies, reshuffleAllZombieLetters
 } from './zombies.js';
-import { tryFullscreenAndLockLandscape } from './controls.js';
+import { tryFullscreenAndLockLandscape, isTouchFirstDevice } from './controls.js';
 
 export let minimapCanvas = null;
 export let minimapCtx = null;
@@ -501,7 +501,6 @@ export     const screens = {
     }
 
     export function startNewRound() {
-      tryFullscreenAndLockLandscape();
       gameStateRef.current = 'PLAYING';
       roundState.roundId++;
       showScreen(null);
@@ -607,19 +606,14 @@ let hasSpokenRotatePrompt = false;
 let orientationWasPaused = false;
 
 export function checkDeviceOrientation() {
-  const isTouchDevice = ('ontouchstart' in window || navigator.maxTouchPoints > 0);
   const overlay = document.getElementById('rotate-device-overlay');
   if (!overlay) return;
 
-  // Di desktop / laptop tidak pernah muncul
-  if (!isTouchDevice) {
-    overlay.classList.remove('show');
-    return;
-  }
-
+  // Hanya HP/tablet dalam posisi tegak; di laptop/desktop tidak pernah muncul
   const isPortrait = window.matchMedia && window.matchMedia('(orientation: portrait)').matches;
+  const showRotate = isTouchFirstDevice() && isPortrait;
 
-  if (isPortrait) {
+  if (showRotate) {
     overlay.classList.add('show');
     if (!orientationWasPaused) {
       orientationWasPaused = true;
@@ -633,6 +627,7 @@ export function checkDeviceOrientation() {
     overlay.classList.remove('show');
     hasSpokenRotatePrompt = false;
     if (orientationWasPaused) {
+      // Lanjut otomatis, kecuali modal "Berhenti main?" sedang terbuka
       orientationWasPaused = false;
       const confirmModal = document.getElementById('modal-confirm-exit');
       if (!confirmModal || !confirmModal.classList.contains('show')) {

@@ -148,6 +148,153 @@ Dampak: **T** = tinggi, **S** = sedang, **R** = rendah.
 | E4 | Animasi `box-shadow` tak berujung saat bermain: `.letter-tile.next-target` (pulseTile) dan `#btn-shoot.in-range` (shootPulse) memaksa repaint setiap frame. | `css/style.css` | S |
 | E5 | Tidak ada `will-change` berlebihan. Beberapa keyframes dirujuk tetapi tidak didefinisikan (`popIn`, `fadeIn`, `floatSlow`, `popupEnter`) - tidak berdampak performa. | `css/style.css` | R |
 
-## FASE 3-6
+## FASE 3: PERBAIKAN (urut dampak tertinggi)
 
-(diisi di bawah setelah perbaikan)
+| Commit | Perbaikan | Temuan |
+|---|---|---|
+| `e8f4600` | Crash game loop diperbaiki: pemanggilan `resolveColliders`/`getSupport` disesuaikan dengan API `world.js`; `startTarget` memakai `sceneRefs.helpArrowGroup` dan meng-import `reshuffleAllZombieLetters`; rakit (`updateRafts`), trampolin (`updateTramps`), perosotan, animasi ombak, panah bantuan 15 detik disambungkan lagi; zombie labirin dikunci dengan `clampToMaze` (dulu dilempar ke koordinat danau). | A1, A2, A7 |
+| `47f1c9d` | Satu loop rAF terjaga (`startLoop`/`stopLoop`), berhenti saat `document.hidden` dan AudioContext di-suspend; menu & layar akhir 30 fps; saat dijeda dirender sekali saja; mini map 10x/detik dan tidak dirender di menu; cache elemen DOM; kelas `in-range` hanya diubah saat berubah; partikel tetap diperbarui di menu; node Web Audio di-disconnect setelah selesai. | A4, A6, C7, C8, C10, D7 |
+| `0f5ef23` | `setPixelRatio(min(dpr, 1.5))`, MSAA hanya bila dpr < 1.5; `PCFShadowMap`; kotak bayangan ±28 unit mengikuti pemain (dibulatkan ke texel agar tidak berkedip); hanya pohon, karakter, zombie yang `castShadow`; hanya tanah (rumput, pasir, petak zona, jalan, bukit, tangga, dermaga, jembatan, lantai labirin) yang `receiveShadow`. Mesh di pass bayangan 218 -> 77. | B1, B2, B3 |
+| `a2d40bd` | Penggabung mesh statis (`js/merge.js`, vertex color, tanpa library tambahan). Tiap rumah & tingkat bukit = 1 mesh (tetap bisa memudar). Benda statis polos lain = 2 mesh (tanah / lainnya). Rakit = 1 mesh per rakit. | B4, B10 |
+| `eb1f0f0` | Zombie memakai geometry/material bersama; badan+kepala 1 mesh, wajah 1 mesh (12 -> 7 draw call per zombie); material papan huruf satu per huruf; billboard tanpa `updateMatrixWorld`; `ensureCorrectLetterAmongZombies` jalur cepat tanpa alokasi; `findNearestLand` paling sering 1x/detik per zombie (zombie yang hendak masuk tepi air dikembalikan ke posisi sebelumnya dan berbalik); hewan di-clone dari cetakan. | B6, C3, C4, C5, D4 |
+| `16cbac9` | Puff & confetti: object pool + 2 InstancedMesh (semua partikel = 2 draw call); proyektil: pool mesh dengan geometry/material bersama; model pemain dan topi/alat preview lama di-dispose. | D1, D2, D3, D5 |
+| `5e179e7` | Spatial grid collider (sel 8 unit, rentang -112..112): `resolveColliders`, `getSupport`, `blockedAtGround` hanya memeriksa collider di sel sekitar; rakit selalu ikut diperiksa. | C2 |
+| `9a18963` | Kamera tanpa `new Vector3` per frame; raycast rumah/bukit tiap 100 ms dengan array hasil dipakai ulang; Kamera Bahu maju mendekat (min 2,2 unit) bila garis pandang terhalang pohon/dinding labirin (`instOccluders`, cek lingkaran 2D tiap 100 ms). | B9, C1, C4 |
+| `f22a4ae` | `backdrop-filter` dari 15 selektor tinggal 4 (panel menu, panel misi, popup kamera, modal). Saat bermain hanya panel misi yang ber-blur. Toast & perayaan `visibility:hidden` saat tidak tampil. Animasi `pulseTile`/`shootPulse` tidak lagi menganimasikan `box-shadow` (cincin denyut di pseudo-element dengan transform+opacity). `#menu-backdrop` `display:none` setelah memudar. | E1, E2, E3, E4 |
+| `249c641` | (temuan saat tes Fase 7) Timer perayaan ronde lama bisa melompati target pertama ronde baru bila pemain keluar lalu cepat main lagi. Timer kini memeriksa `roundState.roundId`. | - |
+
+Catatan keputusan:
+- **BufferGeometryUtils tidak dipakai.** Helper `merge.js` (~60 baris) cukup untuk kebutuhan ini dan menghindari satu request CDN tambahan.
+- **Spatial grid untuk zombie terdekat tidak dibuat.** Jumlah zombie maksimal 16; bidik otomatis dan pemisahan antar-zombie (120 pasang) jauh lebih murah daripada membangun grid tiap frame. Grid dipakai untuk collider (262 buah).
+- **Pohon tidak dibuat transparan** saat menghalangi kamera (InstancedMesh); sesuai arahan, Kamera Bahu memakai cara "kamera maju". Di Kamera Atas pohon besar masih bisa menutupi pemain sesaat (sama seperti versi asli).
+- Rumah dan dekorasi kecil kini tidak membuat bayangan (sesuai arahan "hanya karakter, zombie, dan pohon").
+
+## FASE 4: PENGATURAN KUALITAS GRAFIS (`851102b`)
+
+File: `js/quality.js`, tombol di popup 🎥 (`index.html`), gaya di `css/style.css`, kunci localStorage `zombaca_grafis_v1`.
+
+| Pilihan | Isi |
+|---|---|
+| Otomatis (bawaan) | Mulai dari Tinggi. Selama 5 detik pertama bermain (setelah 0,5 detik pemanasan) FPS diukur; bila < 45 pindah ke Ringan + toast "Grafis disesuaikan supaya lancar". Hasil berlaku untuk sesi itu. |
+| Ringan | Tanpa bayangan, pixel ratio 1, tanpa backdrop-filter (latar semi-solid), bunga & semak setengahnya (slot instance berselang-seling agar tetap merata di semua zona), kabut 38-115 dan `camera.far` 140. |
+| Tinggi | Kualitas penuh setelah optimasi: bayangan, pixel ratio maks 1,5, kabut 55-175, `camera.far` 240. |
+
+MSAA (antialias) hanya bisa ditentukan saat renderer dibuat: aktif untuk Tinggi, mati untuk Ringan,
+dan untuk Otomatis aktif hanya bila dpr < 1,5. Perubahan MSAA berlaku setelah muat ulang.
+
+Dites: memaksa ambang Otomatis (`__zombaca.quality.qualityState.autoThreshold = 1000`) membuat
+grafis turun ke Ringan setelah 5,5 detik dengan toast yang benar; tombol Tinggi mengembalikan bayangan.
+
+## FASE 5: BUG YANG TERLIHAT (`e8f4600`, `0c0d671`)
+
+- **Ubin huruf panel misi hilang.** Penyebab: `startTarget()` di `ui.js` melempar
+  `ReferenceError: helpArrowGroup is not defined` sebelum `renderMissionHUD()` dipanggil
+  (sisa refactor dari single-file; `reshuffleAllZombieLetters` juga tidak di-import).
+  Teks "Target 1 dari 5" yang terlihat hanyalah isi statis HTML. Setelah diperbaiki, dicek di
+  Level 1 (`A`), Level 2 (`NI`), Level 3 (`TOGA` + emoji 🎓).
+- **Kontras "Target X dari N".** Teks kini putih tebal (800, 0.9rem) dengan bayangan teks, dan panel
+  misi memakai latar gelap pekat `rgba(20,16,45,0.58)` (Ringan: 0.82) alih-alih putih 14%.
+
+## FASE 6: SESUDAH vs SEBELUM
+
+Diukur di laptop yang sama, grafis Otomatis (tetap Tinggi karena FPS 60), commit `0c0d671`.
+"Sebelum" = Baseline B (setelah fix crash, sebelum optimasi). Baseline A tidak bisa dibandingkan
+karena layar membeku saat bermain.
+
+| Skenario | Metrik | Sebelum | Sesudah |
+|---|---|---|---|
+| 1. Menu | FPS rata2 / 1% low | 59.9 / 45.6 | 29.3 / 16.0 (sengaja dibatasi 30 fps) |
+| | CPU ms per frame | 4.39 | **1.65** |
+| | Draw call | 211 | **77** |
+| | Triangles | 30 103 | 31 140 |
+| | Geometries / Textures / Programs | 251 / 4 / 8 | **46** / 5 / 11 |
+| | Objek scene | 378 | **160** |
+| 2. Desa, Kamera Atas, Seru | FPS rata2 / 1% low | 59.7 / 32.0 | 59.9 / 39.4 |
+| | CPU ms per frame | 5.74 | **2.54** |
+| | Draw call rata2 (maks) | 290 (305) | **157 (165)** |
+| | Triangles | 39 992 | 41 938 |
+| | Geometries / Textures | 489 / 14 | **51** / 15 |
+| | Objek scene | 566 | **316** |
+| 3. Hutan, Kamera Bahu | FPS rata2 / 1% low | 59.9 / 40.7 | 59.8 / 34.9 |
+| | CPU ms per frame | 4.06 | **1.94** |
+| | Draw call rata2 (maks) | 122 (395) | **62 (176)** |
+| | Geometries / Textures | 461 / 14 | **64** / 16 |
+| 4. Ronde ke-4 setelah 3x "Main Lagi" | FPS rata2 / 1% low | 59.9 / 46.6 | 59.9 / 48.1 |
+| | CPU ms per frame | 5.79 | **2.54** |
+| | Draw call rata2 (maks) | 292 (306) | **155 (159)** |
+| | Geometries / Textures | **1 685 / 16** (terus naik) | **59 / 16** (datar) |
+| | Heap MB | 27.3 | 33.1 (naik-turun karena GC, tidak menumpuk) |
+
+Memori per ronde sesudah optimasi (skenario 4, lalu dilanjutkan 3 ronde lagi di halaman yang sama):
+
+| Ronde | Geometries awal -> akhir | Textures akhir |
+|---|---|---|
+| 1 | 47 -> 56 | 16 |
+| 2 | 56 -> 56 | 16 |
+| 3 | 56 -> 56 | 16 |
+| 5 | 60 -> 60 | 17 |
+| 6 | 60 -> 60 | 17 |
+| 7 | 60 -> 60 | 17 |
+
+Kenaikan kecil di awal (47 -> 60) bukan kebocoran: itu sumber daya **bersama** yang di-upload ke GPU
+saat pertama dipakai (texture huruf yang baru muncul, cetakan hewan per jenis, mesh partikel).
+Setelah semua varian pernah muncul, angkanya datar.
+
+Status target:
+- **Laptop stabil 60 fps**: tercapai (59.8-59.9 fps rata-rata saat bermain). Laptop uji sudah mentok
+  vsync sejak sebelum optimasi, jadi perbaikan terlihat pada waktu CPU per frame yang turun 2-2,5x
+  (ruang lega untuk tablet/HP).
+- **Draw call saat bermain < 250**: tercapai (maks 165 di Desa mode Seru, maks 176 di Hutan).
+- **Geometries/textures setelah 3 ronde tidak terus naik**: tercapai (datar di 56-60 / 16-17).
+
+Catatan pengukuran: nilai "1% low" di laptop ini dipengaruhi gangguan dari alat otomasi
+(screenshot yang diambil untuk menjaga jendela tetap aktif menahan compositor sesaat). Bandingkan
+CPU ms dan draw call untuk melihat dampak optimasi; ukur ulang 1% low di perangkat nyata tanpa alat.
+
+## FASE 7: TES
+
+Tes dijalankan otomatis lewat `?debug=1` + skrip di console, ditambah pengecekan visual screenshot.
+Tidak ada error di console selama seluruh tes.
+
+| Fitur | Hasil |
+|---|---|
+| Semua layar menu (mulai, pilih karakter, alat, level, album, akhir ronde, modal keluar) | OK |
+| 3 karakter (Bima, Dina, Kapi) + preview 3D berputar | OK |
+| 3 alat ajaib: gelembung & tongkat (proyektil mengenai zombie benar, huruf maju), palu bantal (pukulan area) | OK |
+| 3 level (ubin + emoji Level 3) | OK |
+| Jumlah target 3 dan 20 ("Target 1 dari 3", "... dari 20") | OK |
+| Mode Santai 8 / Sedang 12 / Seru 16 zombie | OK |
+| Kamera Atas & Kamera Bahu (petunjuk geser hanya di Bahu) | OK |
+| Mini map (titik pemain & zombie tergambar, 10x/detik) | OK |
+| Air: jatuh ke sungai -> pelampung bebek -> kembali ke darat | OK |
+| Trampolin: memantul (vy 16,1, tinggi 5,6) + toast "Boing!" | OK (dulu tidak berfungsi) |
+| Rakit: pemain ikut terbawa rakit | OK (dulu rakit diam) |
+| Suara: AudioContext `running` setelah klik pertama, tombol musik nyala/mati | OK |
+| Album hewan (jumlah tersimpan) | OK |
+| Topi (pesta, mahkota, koboi, tanpa topi) di preview dan di karakter saat main | OK |
+| Grafis Otomatis/Ringan/Tinggi | OK |
+| Tanpa `?debug=1`: panel & `window.__zombaca` tidak ada | OK |
+
+Belum dites di perangkat sentuh nyata (joystick, geser kamera dua jari) karena tidak tersedia di
+lingkungan kerja ini; kode kontrol sentuh tidak diubah.
+
+## 5 PENYEBAB LAG TERBESAR
+
+1. **Game loop crash setiap frame saat bermain** (`resolveColliders`/`getSupport` dengan signature lama di ES module strict mode): 60 exception/detik, `renderer.render()` tidak pernah tercapai, layar membeku/patah-patah. Juga terjadi di versi online.
+2. **Terlalu banyak draw call**: 16 zombie x 12 mesh + ~165 benda statis terpisah (~430 mesh), plus ~218 mesh di pass bayangan.
+3. **Kebocoran GPU**: geometry & material baru untuk setiap zombie, partikel, confetti, proyektil, hewan, dan model pemain tanpa dispose; geometries 490 -> 1 685 setelah 3 ronde.
+4. **`backdrop-filter` di ~12 area HUD** di atas kanvas WebGL yang berubah tiap frame (termasuk mini map yang blur-nya tertutup canvas sepenuhnya, dan toast/perayaan yang tak terlihat), plus latar menu dengan bulatan blur beranimasi yang hanya disembunyikan dengan opacity.
+5. **Pekerjaan CPU per frame yang tidak perlu**: `findNearestLand` (pencarian spiral ribuan cek) setiap frame untuk zombie di tepi air, tabrakan ke seluruh 262 collider per zombie, `updateMatrixWorld` per zombie, alokasi Vector3/array per frame, mini map 60x/detik, render 60 fps di menu dan saat dijeda.
+
+## SISA PEKERJAAN / SARAN LANJUTAN
+
+- Ukur di tablet & HP kelas menengah sungguhan (target utama). Bila Otomatis sering memilih Ringan,
+  pertimbangkan menyimpan hasil Otomatis ke localStorage agar sesi berikutnya langsung Ringan.
+- Kamera Atas: pohon yang menutupi pemain belum ditangani (bisa dengan menyembunyikan instance
+  mahkota pohon terdekat atau memakai shader dither berdasar jarak).
+- Zombie masih 7 draw call masing-masing; bila perlu lebih ringan, kaki/tangan bisa dijadikan
+  InstancedMesh bersama (animasi lewat matriks instance).
+- `state.js` masih menyimpan array `rafts` & `trampolines` yang tidak dipakai (sisa refactor).
+- Keyframes `popIn`, `fadeIn`, `floatSlow`, `popupEnter` dirujuk CSS tetapi tidak didefinisikan.
+- Semua zombie awal ronde muncul di zona Desa (`spawnZombie(false)`, perilaku asli dipertahankan);
+  README menyebut zombie tersebar di 5 zona. Perlu keputusan desain.

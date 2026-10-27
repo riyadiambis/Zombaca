@@ -298,3 +298,111 @@ lingkungan kerja ini; kode kontrol sentuh tidak diubah.
 - Keyframes `popIn`, `fadeIn`, `floatSlow`, `popupEnter` dirujuk CSS tetapi tidak didefinisikan.
 - Semua zombie awal ronde muncul di zona Desa (`spawnZombie(false)`, perilaku asli dipertahankan);
   README menyebut zombie tersebar di 5 zona. Perlu keputusan desain.
+
+---
+
+## REVIEW ZOMBIE KABUR + VERSI HP
+
+Kondisi awal review: run agent sebelumnya dibatalkan sebelum commit. Semua perubahannya (9 file:
+`css/style.css`, `index.html`, `js/config.js`, `js/controls.js`, `js/main.js`, `js/state.js`, `js/ui.js`,
+`js/weapons.js`, `js/zombies.js`) masih di working tree, tidak ada sisa lain, jadi tidak ada yang di-stash.
+Review dilakukan langsung dari working tree.
+
+| Commit | Isi |
+|---|---|
+| `f5d653b` | Hasil run sebelumnya + perbaikan AI zombie dari review ini |
+| `2222830` | JS versi HP: deteksi perangkat sentuh, joystick, ajakan putar HP |
+| `0f338d2` | CSS versi HP: tampilan laptop dikembalikan, HUD & menu layar pendek |
+
+### Checklist (status akhir)
+
+| # | Permintaan | Status | Catatan |
+|---|---|---|---|
+| A1 | State JALAN-JALAN, KABUR, CAPEK, lalu jeda sebelum kabur lagi | BERES | Diperbaiki: zombie huruf benar dulu terkunci CAPEK 999 detik setelah bantuan selesai |
+| A2 | Kabur menghindari air, pohon, rumah, tepi pulau, tidak mentok di sudut | BERES | Diperbaiki: dulu hanya 2 arah samping, undakan/tangga dihitung tembok. Sekarang 9 sudut, 8x/detik; terpojok -> langsung CAPEK |
+| A3 | CAPEK: diam terengah (badan naik-turun + keringat), bisa dikenai Palu Bantal | BERES | Dites: Palu Bantal mengenai zombie CAPEK |
+| A4 | Tidak pernah mendekati/mengejar pemain, mekanik menggelitik dihapus | BERES | Diperbaiki: jalan-jalan acak dulu bisa mengarah ke pemain; sekarang berbelok menjauh dalam jarak waspada + 6 |
+| A5 | Separation < 4 unit; spawn >= 15 dari pemain, >= 8 dari zombie lain | BERES | Diperbaiki: spawn cadangan dulu 6,5 unit |
+| A6 | Angka mode Santai / Sedang / Seru di `config.js`, kabur tidak melebihi pemain, deskripsi kartu | BERES | Terukur: kabur 2/3/4 s, capek 4/3/2 s, kecepatan maks 4,6 / 6,9 / 8,3 (pemain 9,2) |
+| A7 | Huruf benar: 80% kecepatan, capek +1 s, berhenti kabur saat bantuan 15 detik; jaminan 2 zombie benar & 1 dalam 40 unit | BERES | `ensureCorrectLetterAmongZombies` tidak diubah |
+| B1 | Meta viewport, 100dvh, safe-area, cegah zoom/scroll/menu tekan lama | BERES | Ditambah `gesturestart` untuk zoom cubit Safari iOS |
+| B2 | Layar "Putar HP-mu ke samping ya!" + jeda + lanjut otomatis, tidak di desktop | BERES | Diperbaiki: laptop layar sentuh (`maxTouchPoints > 0`) dulu dianggap HP; sekarang `pointer: coarse`. Game selalu lanjut saat layar ditutup |
+| B3 | Layar penuh + kunci landscape saat Mulai Main, tombol ⛶ hanya perangkat sentuh | BERES | Diperbaiki: laptop layar sentuh masuk layar penuh & tombol ⛶ tampil; panggilan ganda di `startNewRound` dihapus |
+| B4 | HUD layar pendek: tidak tumpuk, mini map 96px, tombol kanan 44px, joystick kiri bawah, Tembak 88px + Lompat 64px melengkung, geser kamera kanan | BERES | Diperbaiki: tombol 84/60px -> 88/64px; panel misi menabrak tombol ⛶ di 667px; toast di atas panel misi; petunjuk geser kamera menabrak panel misi; joystick tak terlihat sebelum disentuh |
+| B5 | Menu muat di HP landscape, tombol lanjut selalu terlihat | BERES | Diperbaiki: Level 540px & Teman 390px di ruang 350px. Sekarang 361 & 311px (sisa gulir 11px) |
+| B6 | Getaran saat huruf benar dan target selesai | BERES | Terukur: `40` per huruf, `[40,60,40]` per target |
+| C1 | Tampilan & kontrol laptop sama seperti sebelumnya | BERES | Diperbaiki: ukuran/tata letak tombol Tembak & Lompat di laptop ikut berubah; `backdrop-filter` baru (6 selektor) dikembalikan ke 4 |
+
+### Bug yang diperbaiki
+
+1. Zombie huruf benar terkunci CAPEK 999 detik setelah bantuan 15 detik selesai (zombie kedua yang membawa huruf benar diam ~17 menit).
+2. Arah kabur hanya mencoba lurus atau belok 81 derajat; bila keduanya terhalang selalu belok kiri, bisa mentok dan bolak-balik di sudut. Cek pakai `isFreeSpot`, yang menganggap undakan, tangga, dermaga dan trampolin sebagai tembok, sehingga zombie di atas undakan "terhalang" ke segala arah. Sekarang `blockedForWalker` (pijakan setinggi STEP_H boleh), 9 sudut, dicek 8x/detik.
+3. Jalan-jalan acak bisa mengarah ke pemain (melanggar "tidak pernah mendekati").
+4. Lengan kanan tetap miring setelah zombie melambai.
+5. Laptop layar sentuh (laptop pengujian, `maxTouchPoints = 2`) diperlakukan sebagai HP: masuk layar penuh saat Mulai Main, tombol ⛶ tampil, bisa muncul ajakan putar.
+6. Ajakan putar HP: bila perangkat berhenti dianggap sentuh saat layar tampil, layar hilang tetapi game tetap dijeda.
+7. Tampilan laptop berubah: tombol Tembak 104 -> 88px, Lompat 78 -> 64px, tata letak melengkung juga di laptop. Dikembalikan; lengkungan hanya di `max-height: 500px`.
+8. `backdrop-filter` baru di overlay putar HP (latar sudah 95% pekat) dan baris tombol menu dihapus.
+9. HUD 667x375: panel misi menabrak tombol kanan saat ⛶ tampil, toast menutupi panel misi, petunjuk geser kamera menabrak panel misi.
+10. Menu Level & Teman tidak muat di HP landscape (Level butuh 540px di ruang 350px; pilihan mode tertutup baris tombol).
+11. Joystick tidak terlihat sampai disentuh. Sekarang diam di kiri bawah dan pindah ke titik jari saat disentuh.
+
+### Angka performa terbaru
+
+Chrome di laptop pengujian sangat dibatasi saat jendela tidak di depan (s2 hanya 22 frame dalam 15 detik),
+jadi FPS tidak bisa diukur. Sebagai gantinya kedua versi diukur dengan cara yang sama: game dijeda lalu
+`updateZombies + updateParticles + updateCamera` dan `renderer.render` dipanggil 600x berturut-turut
+(rata-rata per frame). Versi sebelum = `ee2d661` (angka terakhir AUDIT), sesudah = `0f338d2`. Kanvas 1920x1110.
+
+| Skenario | Draw call | CPU update (ms) | CPU render (ms) |
+|---|---|---|---|
+| s2 Desa, Kamera Atas, Seru: sebelum | 155 | 0,41 | 5,81 |
+| s2: sesudah | 82 | 0,45 | 4,69 |
+| s3 Hutan, Kamera Bahu: sebelum | 35 | 0,40 | 2,52 |
+| s3: sesudah | 58 | 0,54 | 4,37 |
+| Kasus terburuk: 16 zombie kabur bersamaan (sesudah) | 65 | 0,81 | 5,66 |
+
+- Draw call s2 turun dan s3 naik karena sebaran spawn, bukan karena rendering. Aturan jarak 15/8 unit
+  membuat 16 zombie tidak muat di Desa, jadi sebagian muncul di zona lain. Ini juga menjawab catatan
+  "semua zombie muncul di Desa" di SISA PEKERJAAN. Semua masih jauh di bawah target 250.
+- AI kabur menambah ~0,05 ms per frame dalam keadaan normal, ~0,4 ms bila semua 16 zombie kabur.
+
+Memori (s4: Level 1, 3 target, "Main Lagi"):
+
+| Ronde | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+|---|---|---|---|---|---|---|---|
+| Geometries di akhir ronde | 52 | 55 | 58 | 58 | 58 | 58 | 58 |
+| Textures | 14 | 15 | 16 | 16 | 16 | 16 | 16 |
+
+Naik sedikit di 3 ronde pertama (aset bersama dipakai pertama kali: hewan, huruf baru), lalu datar. Tidak ada kebocoran.
+
+### Tes yang dijalankan
+
+| Tes | Hasil |
+|---|---|
+| Simulasi AI 60-90 detik per mode (pemain mengejar zombie terdekat dengan kecepatan penuh, dt 1/60) | 0 frame mendekati pemain, 0 zombie di air, 0% kabur macet di Seru & Sedang (Santai 1%: terdorong separation) |
+| Waktu state terukur Santai / Sedang / Seru | kabur 2,0 / 3,0 / 4,0 s; capek sesuai mode (+1 s untuk huruf benar) |
+| Bantuan 15 detik | Semua zombie huruf benar CAPEK; 2 detik setelah bantuan selesai kembali jalan-jalan |
+| Satu ronde penuh: Gelembung + Santai + Level 1, Bintang + Sedang + Level 2, Palu + Seru + Level 3 (3 target, tombol Tembak) | Semua sampai ROUND_END, 0 error |
+| Laptop (layar sentuh): ukuran tombol, layar penuh, ⛶ | Tembak 104px, Lompat 78px, joystick 140px kiri bawah (sama seperti sebelumnya), tidak layar penuh, ⛶ tersembunyi |
+| HUD 667x375 (iPhone SE), 915x412 (Pixel 7), 1024x768 (iPad) dengan ⛶ tampil, Kamera Bahu + toast | 0 tumpang tindih, semua di dalam layar |
+| Menu Teman / Alat / Level di 667x375 | Muat (Level sisa gulir 11px), tombol lanjut selalu terlihat |
+| Portrait: ajakan putar + jeda, kembali landscape, modal "berhenti" terbuka, perangkat hybrid | Tampil & jeda; lanjut otomatis; tetap jeda bila modal terbuka; tidak macet jeda |
+| Sentuhan sintetis: joystick kiri + kamera kanan bersamaan, Lompat | Joystick ke titik jari, `joyVector` 1,0; kamera berputar; kembali ke kiri bawah saat dilepas; lompat vy 11,2 |
+| Console | 0 error di semua tes |
+
+Catatan cara tes: ukuran HP dites dengan iframe seukuran perangkat (jendela Chrome tidak bisa di-resize
+dari otomasi), `pointer: coarse` disimulasikan dengan mengganti `matchMedia` di iframe, dan sentuhan dengan
+`TouchEvent` sintetis. Laptop pengujian memakai `prefers-reduced-motion`, jadi animasi CSS tidak tampak di sini.
+
+### Masih perlu dites di HP / tablet sungguhan
+
+- FPS nyata di HP kelas menengah dengan `?debug=1` (s2, s3), terutama Seru saat banyak zombie kabur.
+- Layar penuh + kunci landscape (Android Chrome). iOS Safari tidak mendukung keduanya untuk halaman
+  biasa, jadi di iPhone hanya ajakan putar yang bekerja.
+- Rasa joystick mengambang & ukuran area sentuh untuk jari anak; geser kamera satu jari + cubit dua jari di Kamera Bahu.
+- Getaran (Android saja; iOS tidak mendukung `navigator.vibrate`).
+- Notch / safe-area di iPhone landscape (`viewport-fit=cover`) dan bilah alamat yang muncul-hilang (`100dvh`).
+- Suara ajakan "Putar HP-mu ke samping ya!" (speechSynthesis butuh sentuhan pertama di iOS).
+- Keyframes `fadeIn`/`popIn` yang dipakai overlay putar HP memang tidak didefinisikan (lihat catatan
+  sebelumnya), jadi overlay muncul tanpa animasi. Tidak mengganggu.

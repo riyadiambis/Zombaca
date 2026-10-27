@@ -424,11 +424,30 @@ export     const screens = {
       const backdrop = document.getElementById('menu-backdrop');
       if (name === null) {
         if (hud) hud.classList.add('active');
-        if (backdrop) backdrop.classList.add('hidden');
+        if (backdrop) hideMenuBackdrop(backdrop);
       } else {
         if (hud) hud.classList.remove('active');
-        if (backdrop) backdrop.classList.remove('hidden');
+        if (backdrop) showMenuBackdrop(backdrop);
       }
+    }
+
+    // Latar menu (gradien + 3 bulatan blur beranimasi) wajib display:none saat bermain;
+    // opacity 0 saja tetap membuat browser menghitung blur dan animasinya.
+    let backdropHideTimer = null;
+    function hideMenuBackdrop(backdrop) {
+      backdrop.classList.add('hidden');
+      if (backdropHideTimer) clearTimeout(backdropHideTimer);
+      backdropHideTimer = setTimeout(() => {
+        if (backdrop.classList.contains('hidden')) backdrop.style.display = 'none';
+      }, 380);
+    }
+    function showMenuBackdrop(backdrop) {
+      if (backdropHideTimer) clearTimeout(backdropHideTimer);
+      if (backdrop.style.display === 'none') {
+        backdrop.style.display = '';
+        void backdrop.offsetWidth; // paksa reflow agar transisi opacity tetap berjalan
+      }
+      backdrop.classList.remove('hidden');
     }
 
     let toastTimeout = null;

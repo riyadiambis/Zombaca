@@ -7,6 +7,16 @@ import { saveState, selectionState, playerState, sceneRefs } from './state.js';
 export const previewConfigs = ['bima', 'dina', 'kapi'];
 export const previewRenderers = sceneRefs.previewRenderers;
 
+// Bebaskan geometry & material milik model yang tidak dipakai lagi (model karakter unik per ronde)
+export function disposeObject3D(root) {
+  root.traverse(o => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) {
+      (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.dispose());
+    }
+  });
+}
+
     export function createHatMesh(hatType) {
       const hatGroup = new THREE.Group();
       if (hatType === 'party') {
@@ -338,17 +348,26 @@ export const previewRenderers = sceneRefs.previewRenderers;
         const item = previewRenderers[type];
         if (!item) return;
         const { hatAnchor, toolAnchor } = item.model;
-        while (hatAnchor.children.length > 0) hatAnchor.remove(hatAnchor.children[0]);
+        while (hatAnchor.children.length > 0) {
+          const old = hatAnchor.children[0];
+          hatAnchor.remove(old);
+          disposeObject3D(old);
+        }
         if (saveState.hat !== 'none') hatAnchor.add(createHatMesh(saveState.hat));
 
-        while (toolAnchor.children.length > 0) toolAnchor.remove(toolAnchor.children[0]);
+        while (toolAnchor.children.length > 0) {
+          const old = toolAnchor.children[0];
+          toolAnchor.remove(old);
+          disposeObject3D(old);
+        }
         toolAnchor.add(createMagicToolMesh(selectionState.tool));
       });
     }
 
 export function rebuildPlayerModel() {
-  if (sceneRefs.playerObj && sceneRefs.playerObj.root && sceneRefs.scene) {
-    sceneRefs.scene.remove(sceneRefs.playerObj.root);
+  if (sceneRefs.playerObj && sceneRefs.playerObj.root) {
+    if (sceneRefs.scene) sceneRefs.scene.remove(sceneRefs.playerObj.root);
+    disposeObject3D(sceneRefs.playerObj.root);
   }
   sceneRefs.playerObj = createCharacterModel(selectionState.char, saveState.hat, selectionState.tool);
   sceneRefs.playerObj.root.position.set(playerState.x, playerState.y, playerState.z);

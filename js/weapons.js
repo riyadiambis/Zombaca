@@ -17,56 +17,120 @@ import {
   startTarget, finishRound, showToast
 } from './ui.js';
 
-    export function spawnPuffParticles(x, y, z, count = 16) {
-      for (let i = 0; i < count; i++) {
-        if (particles.length > 100) {
-          const old = particles.shift();
-          sceneRefs.scene.remove(old.mesh);
-        }
-        const size = 0.28 + Math.random() * 0.32;
-        const mesh = new THREE.Mesh(
-          new THREE.BoxGeometry(size, size, size),
-          new THREE.MeshLambertMaterial({ color: PARTICLE_COLORS[i % PARTICLE_COLORS.length] })
-        );
-        mesh.position.set(x, y, z);
-        sceneRefs.scene.add(mesh);
+    /*********************************************************************
+     * PARTIKEL (OBJECT POOL + INSTANCEDMESH)
+     * Semua puff = 1 draw call, semua confetti = 1 draw call. Objek partikel
+     * dipakai ulang dari pool supaya tidak ada geometry/material/objek baru.
+     *********************************************************************/
+    const PARTICLE_MAX = 160; // slot per jenis (puff / confetti)
+    const KIND_PUFF = 0;
+    const KIND_CONFETTI = 1;
+    const particlePool = [];
+    const particleColors = PARTICLE_COLORS.map(c => new THREE.Color(c));
+    const _pDummy = new THREE.Object3D();
+    let puffInst = null;
+    let confettiInst = null;
 
+    function makeParticleInstanced(geo, mat) {
+      const m = new THREE.InstancedMesh(geo, mat, PARTICLE_MAX);
+      m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      // Isi warna semua slot sejak awal agar shader langsung dibuat dengan warna per instance
+      for (let i = 0; i < PARTICLE_MAX; i++) m.setColorAt(i, particleColors[i % particleColors.length]);
+      m.count = 0;
+      m.frustumCulled = false;
+      sceneRefs.scene.add(m);
+      return m;
+    }
+
+    function ensureParticleMeshes() {
+      if (puffInst) return;
+      puffInst = makeParticleInstanced(
+        new THREE.BoxGeometry(1, 1, 1),
+        new THREE.MeshLambertMaterial({ color: 0xFFFFFF })
+      );
+      confettiInst = makeParticleInstanced(
+        new THREE.BoxGeometry(0.32, 0.32, 0.12),
+        new THREE.MeshBasicMaterial({ color: 0xFFFFFF })
+      );
+    }
+
+    function acquireParticle() {
+      // Batas total partikel: buang yang paling tua bila penuh
+      if (particles.length >= PARTICLE_MAX * 2) particlePool.push(particles.shift());
+      const pt = particlePool.pop() || {};
+      particles.push(pt);
+      return pt;
+    }
+
+    export function spawnPuffParticles(x, y, z, count = 16) {
+      if (!sceneRefs.scene) return;
+      ensureParticleMeshes();
+      for (let i = 0; i < count; i++) {
+        const pt = acquireParticle();
         const a = Math.random() * Math.PI * 2;
         const spd = 2.5 + Math.random() * 4.5;
-        particles.push({
-          mesh,
-          vx: Math.cos(a) * spd,
-          vy: 2.5 + Math.random() * 4.5,
-          vz: Math.sin(a) * spd,
-          life: 0.65 + Math.random() * 0.35,
-          maxLife: 1.0,
-          gravity: 9.5
-        });
+        pt.kind = KIND_PUFF;
+        pt.colorIdx = i % particleColors.length;
+        pt.size = 0.28 + Math.random() * 0.32;
+        pt.x = x; pt.y = y; pt.z = z;
+        pt.rx = 0; pt.ry = 0;
+        pt.vx = Math.cos(a) * spd;
+        pt.vy = 2.5 + Math.random() * 4.5;
+        pt.vz = Math.sin(a) * spd;
+        pt.life = 0.65 + Math.random() * 0.35;
+        pt.maxLife = 1.0;
+        pt.gravity = 9.5;
       }
     }
 
     export function spawnConfettiBurst() {
+      if (!sceneRefs.scene) return;
+      ensureParticleMeshes();
       for (let i = 0; i < 38; i++) {
-        const mesh = new THREE.Mesh(
-          new THREE.BoxGeometry(0.32, 0.32, 0.12),
-          new THREE.MeshBasicMaterial({ color: PARTICLE_COLORS[i % PARTICLE_COLORS.length] })
-        );
-        mesh.position.set(
-          playerState.x + (Math.random() - 0.5) * 6,
-          playerState.y + 4.5 + Math.random() * 2,
-          playerState.z + (Math.random() - 0.5) * 6
-        );
-        sceneRefs.scene.add(mesh);
-        particles.push({
-          mesh,
-          vx: (Math.random() - 0.5) * 6,
-          vy: 2 + Math.random() * 4,
-          vz: (Math.random() - 0.5) * 6,
-          life: 1.4,
-          maxLife: 1.4,
-          gravity: 5.5
-        });
+        const pt = acquireParticle();
+        pt.kind = KIND_CONFETTI;
+        pt.colorIdx = i % particleColors.length;
+        pt.size = 1;
+        pt.x = playerState.x + (Math.random() - 0.5) * 6;
+        pt.y = playerState.y + 4.5 + Math.random() * 2;
+        pt.z = playerState.z + (Math.random() - 0.5) * 6;
+        pt.rx = 0; pt.ry = 0;
+        pt.vx = (Math.random() - 0.5) * 6;
+        pt.vy = 2 + Math.random() * 4;
+        pt.vz = (Math.random() - 0.5) * 6;
+        pt.life = 1.4;
+        pt.maxLife = 1.4;
+        pt.gravity = 5.5;
       }
+    }
+
+    /*********************************************************************
+     * PROYEKTIL (OBJECT POOL, GEOMETRY & MATERIAL DIPAKAI BERSAMA)
+     *********************************************************************/
+    let projRes = null;
+    const projPool = { bubble: [], wand: [] };
+
+    function getProjectileMesh(isBubble) {
+      if (!projRes) {
+        projRes = {
+          bubbleGeo: new THREE.SphereGeometry(0.45, 14, 14),
+          bubbleMat: new THREE.MeshLambertMaterial({ color: 0x22D3EE, transparent: true, opacity: 0.78 }),
+          wandGeo: new THREE.BoxGeometry(0.5, 0.5, 0.5),
+          wandMat: new THREE.MeshLambertMaterial({ color: 0xFACC15 })
+        };
+      }
+      const pool = isBubble ? projPool.bubble : projPool.wand;
+      const mesh = pool.pop() || (isBubble
+        ? new THREE.Mesh(projRes.bubbleGeo, projRes.bubbleMat)
+        : new THREE.Mesh(projRes.wandGeo, projRes.wandMat));
+      mesh.userData.isBubble = isBubble;
+      mesh.rotation.set(0, 0, 0);
+      return mesh;
+    }
+
+    function releaseProjectileMesh(mesh) {
+      if (sceneRefs.scene) sceneRefs.scene.remove(mesh);
+      (mesh.userData.isBubble ? projPool.bubble : projPool.wand).push(mesh);
     }
 
     export function spawnHoppingAnimal(x, z) {
@@ -302,16 +366,7 @@ import {
         // Pistol Gelembung atau Tongkat Bintang
         playSound(selectionState.tool);
         const isBubble = selectionState.tool === 'bubble';
-        const projMesh = new THREE.Mesh(
-          isBubble
-            ? new THREE.SphereGeometry(0.45, 14, 14)
-            : new THREE.BoxGeometry(0.5, 0.5, 0.5),
-          new THREE.MeshLambertMaterial({
-            color: isBubble ? 0x22D3EE : 0xFACC15,
-            transparent: isBubble,
-            opacity: isBubble ? 0.78 : 1.0
-          })
-        );
+        const projMesh = getProjectileMesh(isBubble);
 
         const startX = playerState.x + Math.sin(playerState.rotY) * 1.1;
         const startZ = playerState.z + Math.cos(playerState.rotY) * 1.1;
@@ -338,7 +393,7 @@ export function updateProjectiles(dt) {
     const p = projectiles[i];
     p.life -= dt;
     if (p.life <= 0) {
-      if (sceneRefs.scene) sceneRefs.scene.remove(p.mesh);
+      releaseProjectileMesh(p.mesh);
       projectiles.splice(i, 1);
       continue;
     }
@@ -366,7 +421,7 @@ export function updateProjectiles(dt) {
         const dist = Math.hypot(p.mesh.position.x - z.x, p.mesh.position.z - z.z);
         if (dist < 1.25) {
           if (z.letter === getNeededLetter()) {
-            if (sceneRefs.scene) sceneRefs.scene.remove(p.mesh);
+            releaseProjectileMesh(p.mesh);
             projectiles.splice(i, 1);
             onCorrectZombieHit(z, j);
           } else {
@@ -386,25 +441,41 @@ export function updateProjectiles(dt) {
   }
 }
 
-// Update Partikel Puff & Confetti
+// Update Partikel Puff & Confetti (tulis matriks instance; tanpa alokasi)
 export function updateParticles(dt) {
+  if (!puffInst) return;
+  let nPuff = 0, nConf = 0;
   for (let i = particles.length - 1; i >= 0; i--) {
     const pt = particles[i];
     pt.life -= dt;
     if (pt.life <= 0) {
-      if (sceneRefs.scene) sceneRefs.scene.remove(pt.mesh);
+      particlePool.push(pt);
       particles.splice(i, 1);
       continue;
     }
     pt.vy -= pt.gravity * dt;
-    pt.mesh.position.x += pt.vx * dt;
-    pt.mesh.position.y += pt.vy * dt;
-    pt.mesh.position.z += pt.vz * dt;
-    pt.mesh.rotation.x += dt * 5;
-    pt.mesh.rotation.y += dt * 5;
-    const sc = Math.max(0.05, pt.life / pt.maxLife);
-    pt.mesh.scale.set(sc, sc, sc);
+    pt.x += pt.vx * dt;
+    pt.y += pt.vy * dt;
+    pt.z += pt.vz * dt;
+    pt.rx += dt * 5;
+    pt.ry += dt * 5;
+    const inst = pt.kind === KIND_CONFETTI ? confettiInst : puffInst;
+    const idx = pt.kind === KIND_CONFETTI ? nConf++ : nPuff++;
+    if (idx >= PARTICLE_MAX) continue;
+    const sc = Math.max(0.05, pt.life / pt.maxLife) * pt.size;
+    _pDummy.position.set(pt.x, pt.y, pt.z);
+    _pDummy.rotation.set(pt.rx, pt.ry, 0);
+    _pDummy.scale.set(sc, sc, sc);
+    _pDummy.updateMatrix();
+    inst.setMatrixAt(idx, _pDummy.matrix);
+    inst.setColorAt(idx, particleColors[pt.colorIdx]);
   }
+  puffInst.count = Math.min(nPuff, PARTICLE_MAX);
+  confettiInst.count = Math.min(nConf, PARTICLE_MAX);
+  puffInst.instanceMatrix.needsUpdate = true;
+  confettiInst.instanceMatrix.needsUpdate = true;
+  if (puffInst.instanceColor) puffInst.instanceColor.needsUpdate = true;
+  if (confettiInst.instanceColor) confettiInst.instanceColor.needsUpdate = true;
 }
 
 // Update Hewan Balok Lucu yang Melompat Bebas

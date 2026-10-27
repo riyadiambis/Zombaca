@@ -16,9 +16,10 @@ import {
   resolveColliders, getSupport, lerpAngle, normalizeAngle,
   updateRafts, updateTramps
 } from './world.js';
-import { playSound, speakText, ensureAudioContext } from './audio.js';
+import { playSound, speakText, ensureAudioContext, suspendAudio, resumeAudio } from './audio.js';
 import {
-  initLetterTextures, createStartWavingZombie, updateZombies, getNeededLetter
+  initLetterTextures, createStartWavingZombie, updateZombies, getNeededLetter,
+  spawnZombie
 } from './zombies.js';
 import {
   rebuildPlayerModel, initCharacterPreviews, previewConfigs,
@@ -32,7 +33,7 @@ import {
   updateCamera, applyCamModeUI, resetCameraBehindPlayer
 } from './camera.js';
 import { initControls } from './controls.js';
-import { initDebug, debugFrame } from './debug.js';
+import { initDebug, debugFrame, debugResetTiming } from './debug.js';
 import {
   initUI, buildMinimapBase, renderMinimap, updateStarHUD,
   announceCurrentTarget, showToast
@@ -142,16 +143,77 @@ export function triggerWaterRescue() {
  *************************************************************************/
 const clock = new THREE.Clock();
 
-function animate() {
-  requestAnimationFrame(animate);
-  const workStart = performance.now();
-  tick();
-  debugFrame(workStart);
+// Hanya boleh ada SATU loop requestAnimationFrame. startLoop() aman dipanggil berulang.
+let rafId = 0;
+let loopRunning = false;
+let frameAccum = 0;          // akumulasi waktu untuk pembatas 30 fps di menu
+let pausedFrameDrawn = false;
+let minimapTimer = 0;
+const MENU_FRAME_TIME = 1 / 30;
+const MINIMAP_INTERVAL = 0.1;
+
+function startLoop() {
+  if (loopRunning) return;
+  loopRunning = true;
+  clock.getDelta(); // buang jeda panjang saat tab tersembunyi
+  frameAccum = 0;
+  debugResetTiming();
+  rafId = requestAnimationFrame(animate);
 }
 
-function tick() {
+function stopLoop() {
+  loopRunning = false;
+  cancelAnimationFrame(rafId);
+}
 
-  const dt = Math.min(clock.getDelta(), 0.05);
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    stopLoop();
+    suspendAudio();
+  } else {
+    resumeAudio();
+    startLoop();
+  }
+});
+
+function animate() {
+  if (!loopRunning) return;
+  rafId = requestAnimationFrame(animate);
+  const workStart = performance.now();
+  if (tick()) debugFrame(workStart);
+}
+
+// Elemen DOM yang disentuh setiap frame (di-cache supaya tidak getElementById per frame)
+const charScreenEl = document.getElementById('screen-char');
+const btnShootEl = document.getElementById('btn-shoot');
+let shootInRange = false;
+
+function setShootInRange(inRange) {
+  if (inRange === shootInRange) return;
+  shootInRange = inRange;
+  if (btnShootEl) btnShootEl.classList.toggle('in-range', inRange);
+}
+
+// Mengembalikan true bila frame ini benar-benar dirender
+function tick() {
+  frameAccum += clock.getDelta();
+  const isPlaying = gameStateRef.current === 'PLAYING';
+  // Di menu / layar akhir cukup 30 fps
+  if (!isPlaying && frameAccum < MENU_FRAME_TIME - 0.002) return false;
+  const dt = Math.min(frameAccum, 0.05);
+  frameAccum = 0;
+
+  // Saat dijeda, scene tidak berubah: render sekali saja lalu diam
+  if (isPlaying && gameStateRef.isPaused) {
+    if (!pausedFrameDrawn) {
+      renderer.render(scene, camera);
+      pausedFrameDrawn = true;
+      return true;
+    }
+    return false;
+  }
+  pausedFrameDrawn = false;
+
   totalTimeRef.t += dt;
   const totalTime = totalTimeRef.t;
 
@@ -169,8 +231,7 @@ function tick() {
   updateTramps(dt);
 
   // 4. Render Preview Karakter Berputar di Layar Pilih Karakter
-  const charScreen = document.getElementById('screen-char');
-  if (charScreen && charScreen.classList.contains('active')) {
+  if (charScreenEl && charScreenEl.classList.contains('active')) {
     previewConfigs.forEach(type => {
       const item = previewRenderers[type];
       if (item) {
@@ -197,17 +258,13 @@ function tick() {
     }
 
     updateZombies(dt, false);
-    renderMinimap();
+    updateParticles(dt);
+    updateHoppingAnimals(dt);
     renderer.render(scene, camera);
-    return;
+    return true;
   }
 
   /**************** STATE BERMAIN (PLAYING) ****************/
-  if (gameStateRef.isPaused) {
-    renderer.render(scene, camera);
-    return;
-  }
-
   if (playerState.shootCooldown > 0) playerState.shootCooldown -= dt;
   if (playerState.toolSwingTimer > 0) playerState.toolSwingTimer -= dt;
   if (screenState.shakeTime > 0) screenState.shakeTime -= dt;
@@ -390,21 +447,23 @@ function tick() {
     }
   }
 
+  // Kamera diperbarui sebelum zombie supaya papan huruf menghadap kamera frame ini
+  updateCamera(dt, true);
+
   // Update Zombies
   updateZombies(dt, true);
 
   // Auto-Aim Target Ring & Tombol Tembak
-  const btnShoot = document.getElementById('btn-shoot');
   const aimedZombie = findBestTargetZombie();
   if (aimedZombie) {
     targetRingMesh.visible = true;
     targetRingMesh.position.set(aimedZombie.x, aimedZombie.y + 0.07, aimedZombie.z);
     const pulse = 1 + Math.sin(totalTime * 10) * 0.14;
     targetRingMesh.scale.set(pulse, pulse, 1);
-    if (btnShoot) btnShoot.classList.add('in-range');
+    setShootInRange(true);
   } else {
     targetRingMesh.visible = false;
-    if (btnShoot) btnShoot.classList.remove('in-range');
+    setShootInRange(false);
   }
 
   // Bantuan Otomatis 15 Detik
@@ -415,7 +474,10 @@ function tick() {
   }
   if (roundState.hintActive) {
     const neededLetter = getNeededLetter();
-    const correctZ = zombies.find(z => z.letter === neededLetter);
+    let correctZ = null;
+    for (let i = 0; i < zombies.length; i++) {
+      if (zombies[i].letter === neededLetter) { correctZ = zombies[i]; break; }
+    }
     if (correctZ) {
       helpArrowGroup.visible = true;
       helpArrowGroup.position.set(playerState.x, playerState.y + 3.6 + Math.sin(totalTime * 6) * 0.2, playerState.z);
@@ -432,11 +494,15 @@ function tick() {
   updateParticles(dt);
   updateHoppingAnimals(dt);
 
-  // Update Kamera & Mini Map
-  updateCamera(dt, true);
-  renderMinimap();
+  // Mini map cukup 10x per detik
+  minimapTimer += dt;
+  if (minimapTimer >= MINIMAP_INTERVAL) {
+    minimapTimer = 0;
+    renderMinimap();
+  }
 
   renderer.render(scene, camera);
+  return true;
 }
 
 // Responsif Layar
@@ -462,11 +528,10 @@ async function initGame() {
 
   // Tampilkan 4 zombie santai di desa pada menu awal
   for (let i = 0; i < 4; i++) {
-    const { spawnZombie } = await import('./zombies.js');
     spawnZombie(0);
   }
 
-  animate();
+  startLoop();
 }
 
 window.addEventListener('DOMContentLoaded', () => {

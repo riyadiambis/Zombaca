@@ -34,8 +34,26 @@ export function playTone(freqStart, freqEnd, duration, type = 'sine', gainVal = 
   gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
   osc.connect(gain);
   gain.connect(audioState.ctx.destination);
+  // Lepas node setelah selesai supaya tidak menumpuk di graf audio
+  osc.onended = () => {
+    osc.disconnect();
+    gain.disconnect();
+  };
   osc.start(now);
   osc.stop(now + duration + 0.02);
+}
+
+// Hentikan audio saat tab tersembunyi, lanjutkan saat terlihat lagi
+export function suspendAudio() {
+  if (audioState.ctx && audioState.ctx.state === 'running') {
+    audioState.ctx.suspend();
+  }
+}
+
+export function resumeAudio() {
+  if (audioState.ctx && audioState.ctx.state === 'suspended') {
+    audioState.ctx.resume();
+  }
 }
 
 export function playSound(kind) {

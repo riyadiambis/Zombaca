@@ -10,6 +10,7 @@ import {
   occludableObjects, occludableMeshes, meshToOccludableMap, instOccluders,
   sceneRefs, totalTimeRef
 } from './state.js';
+import { mergeMeshes, vertexColorLambert } from './merge.js';
 
 export const staticGroup = new THREE.Group();
 export const dynGroup = new THREE.Group();
@@ -18,25 +19,50 @@ export let oceanMesh = null;
 export const waveRingMeshes = [];
 export const waterMats = [];
 
+    // Objek yang bisa memudar saat menghalangi kamera (rumah, tingkat bukit).
+    // Semua bagiannya digabung jadi SATU mesh dengan material sendiri (untuk opacity),
+    // sehingga satu rumah = satu draw call.
     export function registerOccludableGroup(groupOrMesh) {
-      const meshes = [];
-      groupOrMesh.traverse(child => {
-        if (child.isMesh) {
-          // Kloning material agar perubahan opacity tidak mempengaruhi objek lain
-          child.material = Array.isArray(child.material)
-            ? child.material.map(m => m.clone())
-            : child.material.clone();
-          meshes.push(child);
-          occludableMeshes.push(child);
-        }
-      });
+      const parts = [];
+      groupOrMesh.traverse(child => { if (child.isMesh) parts.push(child); });
+      const geo = mergeMeshes(parts, groupOrMesh);
+      const mat = vertexColorLambert();
+      let merged;
+      if (groupOrMesh.isMesh) {
+        groupOrMesh.geometry.dispose();
+        groupOrMesh.geometry = geo;
+        groupOrMesh.material = mat;
+        merged = groupOrMesh;
+      } else {
+        parts.forEach(m => { m.parent.remove(m); m.geometry.dispose(); });
+        merged = new THREE.Mesh(geo, mat);
+        groupOrMesh.add(merged);
+      }
+      merged.userData.occluder = true;
+      occludableMeshes.push(merged);
       const entry = {
-        meshes,
+        meshes: [merged],
         currentOpacity: 1.0,
         targetOpacity: 1.0
       };
       occludableObjects.push(entry);
-      meshes.forEach(m => meshToOccludableMap.set(m, entry));
+      meshToOccludableMap.set(merged, entry);
+    }
+
+    // Gabungkan semua mesh di dalam group menjadi satu mesh (posisi relatif group tetap)
+    export function bakeGroupInPlace(group) {
+      const parts = [];
+      group.traverse(child => { if (child.isMesh) parts.push(child); });
+      if (parts.length < 2) return;
+      const geo = mergeMeshes(parts, group);
+      parts.forEach(m => { m.parent.remove(m); m.geometry.dispose(); });
+      group.add(new THREE.Mesh(geo, sharedVertexColorMat()));
+    }
+
+    let _sharedVcMat = null;
+    function sharedVertexColorMat() {
+      if (!_sharedVcMat) _sharedVcMat = vertexColorLambert();
+      return _sharedVcMat;
     }
 
     // Fungsi bantu matematika sudut terpendek (-PI sampai PI)
@@ -516,6 +542,7 @@ export const worldRng = mulberry32(20240607);
       }
       addBoxMesh(group, 0.14, 1.6, 0.14, -1.4, 1.3, -1.4, 0x78350F);
       addBoxMesh(group, 0.8, 0.5, 0.06, -1.0, 1.85, -1.4, 0xF472B6);
+      bakeGroupInPlace(group);
       dynGroup.add(group);
       const min = -17.68, max = 5.68;
       const raft = {
@@ -548,9 +575,10 @@ export const worldRng = mulberry32(20240607);
     // ---------- Trampolin ----------
     export function addTramp(x, z) {
       const g = new THREE.Group();
+      // Cincin trampolin diam: masuk dunia statis supaya ikut digabung
       const ring = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 2.3, 0.45, 18), lam(0x3B82F6));
-      ring.position.y = 0.225; ring.castShadow = true; ring.receiveShadow = true;
-      g.add(ring);
+      ring.position.set(x, 0.225, z);
+      staticGroup.add(ring);
       const disc = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.9, 0.1, 18), lam(0xF472B6));
       disc.position.y = 0.45;
       g.add(disc);
@@ -859,6 +887,34 @@ export const worldRng = mulberry32(20240607);
       mr.instanceMatrix.needsUpdate = true;
     }
 
+    function bakeStaticWorld() {
+      const groundParts = [], otherParts = [];
+      staticGroup.traverse(o => {
+        if (!o.isMesh || o.isInstancedMesh || o.userData.occluder) return;
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        if (mats.some(m => m.map || m.transparent)) return;
+        (o.userData.ground ? groundParts : otherParts).push(o);
+      });
+      [[groundParts, true], [otherParts, false]].forEach(([parts, ground]) => {
+        if (!parts.length) return;
+        const geo = mergeMeshes(parts, staticGroup);
+        parts.forEach(m => {
+          m.parent.remove(m);
+          m.geometry.dispose();
+          // Material dari ground patch dibuat unik per patch (bukan cache lam)
+          if (m.userData.ground && !Array.isArray(m.material) && !Object.values(lamCache).includes(m.material)) m.material.dispose();
+        });
+        const merged = new THREE.Mesh(geo, sharedVertexColorMat());
+        merged.receiveShadow = ground;
+        merged.userData.ground = ground;
+        staticGroup.add(merged);
+      });
+      // Buang group kosong yang tersisa (sumur, gerobak, dll.)
+      const empties = [];
+      staticGroup.traverse(o => { if (o !== staticGroup && o.isGroup && o.children.length === 0) empties.push(o); });
+      empties.forEach(o => o.parent.remove(o));
+    }
+
     // ---------- Pembangun dunia utama ----------
     export function buildWorld() {
       if (sceneRefs.scene) {
@@ -953,10 +1009,10 @@ export const worldRng = mulberry32(20240607);
         if (Math.abs(lz - 50) < 3.2 || Math.abs(lz - 58) < 3.2) continue;
         const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.04, 10), lam(0x22C55E));
         pad.position.set(lx, 0.08, lz);
-        sceneRefs.scene.add(pad);
+        staticGroup.add(pad);
         const fl = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.1, 6), lam(0xF472B6));
         fl.position.set(lx + 0.1, 0.13, lz);
-        sceneRefs.scene.add(fl);
+        staticGroup.add(fl);
       }
 
       // 4. Jalan setapak balok krem menghubungkan semua zona
@@ -1124,6 +1180,10 @@ export const worldRng = mulberry32(20240607);
         o.castShadow = !!o.userData.castShadow;
         o.receiveShadow = !!o.userData.ground;
       }));
+
+      // Gabungkan semua benda statis polos (bukan instanced, bukan rumah/bukit yang bisa
+      // memudar, bukan bertekstur) menjadi 2 mesh: permukaan tanah dan sisanya.
+      bakeStaticWorld();
 
       // Bekukan matriks benda diam agar ringan di tablet
       staticGroup.traverse(o => {

@@ -517,7 +517,8 @@
     /* Panel Misi Tengah Atas */
     .mission-pill {
       pointer-events: auto;
-      background: var(--kaca);
+      /* Latar lebih pekat agar huruf & teks progres terbaca di atas langit/rumput terang */
+      background: rgba(20, 16, 45, 0.58);
       backdrop-filter: blur(18px);
       -webkit-backdrop-filter: blur(18px);
       border: 1px solid var(--kaca-garis);
@@ -810,9 +811,10 @@
     .round-progress-text {
       width: 100%;
       text-align: center;
-      font-size: 0.82rem;
-      font-weight: 700;
-      color: var(--teks-redup);
+      font-size: 0.9rem;
+      font-weight: 800;
+      color: #FFFFFF;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.65);
       margin-top: 2px;
     }
 

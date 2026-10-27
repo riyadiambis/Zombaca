@@ -501,6 +501,7 @@ export     const screens = {
 
     export function startNewRound() {
       gameStateRef.current = 'PLAYING';
+      roundState.roundId++;
       showScreen(null);
 
       if (sceneRefs.startScreenZombie) {

@@ -161,6 +161,7 @@ import {
     export function onCorrectZombieHit(zombie, indexInArray) {
       const hitLetter = zombie.letter;
       const hitIndex = roundState.letterIndex;
+      const roundId = roundState.roundId;
       const worldPos = zombie.model.root.position.clone();
 
       // Efek Puff + Ubah Jadi Hewan Lucu
@@ -205,6 +206,7 @@ import {
         // Jadwalkan zombie baru muncul agar jumlah tetap sesuai mode
         const delayMs = MODE_CONFIG[selectionState.mode].respawnDelay * 1000;
         setTimeout(() => {
+          if (roundState.roundId !== roundId) return;
           if (gameStateRef.current === 'PLAYING' && zombies.length < MODE_CONFIG[selectionState.mode].count) {
             spawnZombie(-1);
             ensureCorrectLetterAmongZombies();
@@ -241,6 +243,7 @@ import {
           const totalTargets = roundState.targets.length;
           if (totalTargets > 5 && completedCount % 5 === 0 && completedCount < totalTargets) {
             setTimeout(() => {
+              if (roundState.roundId !== roundId) return;
               showToast(`🎉 Hebat! Sudah ${completedCount}!`);
               speakText(`Hebat! Sudah ${completedCount}!`);
               spawnConfettiBurst();
@@ -255,7 +258,8 @@ import {
 
           setTimeout(() => {
             celebBox.classList.remove('show');
-            if (gameStateRef.current !== 'PLAYING') return;
+            // Abaikan bila pemain sudah keluar atau sudah memulai ronde baru
+            if (gameStateRef.current !== 'PLAYING' || roundState.roundId !== roundId) return;
 
             if (roundState.targetIndex + 1 < roundState.targets.length) {
               // Pastikan jumlah zombie penuh kembali

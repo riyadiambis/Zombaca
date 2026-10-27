@@ -131,7 +131,8 @@ export const roundState = {
   letterIndex: 0,
   targetTimer: 0,
   hintActive: false,
-  animalsRescued: 0
+  animalsRescued: 0,
+  roundId: 0 // naik setiap ronde baru; timer dari ronde lama diabaikan
 };
 
 export const screenState = {

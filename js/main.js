@@ -31,6 +31,7 @@ import {
   updateCamera, applyCamModeUI, resetCameraBehindPlayer
 } from './camera.js';
 import { initControls } from './controls.js';
+import { initDebug, debugFrame } from './debug.js';
 import {
   initUI, buildMinimapBase, renderMinimap, updateStarHUD,
   announceCurrentTarget, showToast
@@ -142,6 +143,7 @@ const clock = new THREE.Clock();
 
 function animate() {
   requestAnimationFrame(animate);
+  debugFrame();
 
   const dt = Math.min(clock.getDelta(), 0.05);
   totalTimeRef.t += dt;
@@ -466,6 +468,7 @@ async function initGame() {
   updateStarHUD(false);
   initControls();
   initUI();
+  initDebug();
 
   // Tampilkan 4 zombie santai di desa pada menu awal
   for (let i = 0; i < 4; i++) {

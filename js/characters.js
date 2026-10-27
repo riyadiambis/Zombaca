@@ -313,7 +313,7 @@ export const previewRenderers = sceneRefs.previewRenderers;
         const cnv = document.getElementById(`preview-${type}`);
         if (!cnv) return;
         const pRenderer = new THREE.WebGLRenderer({ canvas: cnv, alpha: true, antialias: true });
-        pRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        pRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
         pRenderer.setSize(140, 140, false);
 
         const pScene = new THREE.Scene();

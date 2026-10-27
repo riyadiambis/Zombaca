@@ -335,6 +335,7 @@ export const worldRng = mulberry32(20240607);
       m.rotation.x = -Math.PI / 2;
       m.position.y = y;
       m.receiveShadow = true;
+      m.userData.ground = true;
       staticGroup.add(m);
     }
 
@@ -406,6 +407,7 @@ export const worldRng = mulberry32(20240607);
       m.position.set((x0 + x1) / 2, top / 2, (z0 + z1) / 2);
       m.castShadow = true;
       m.receiveShadow = true;
+      m.userData.ground = true;
       staticGroup.add(m);
       registerOccludableGroup(m);
       addBoxCollider(x0, x1, z0, z1, top, 'tier');
@@ -423,6 +425,7 @@ export const worldRng = mulberry32(20240607);
         const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, top, z1 - z0), lam(color));
         m.position.set((x0 + x1) / 2, top / 2, (z0 + z1) / 2);
         m.castShadow = true; m.receiveShadow = true;
+        m.userData.ground = true;
         staticGroup.add(m);
         addBoxCollider(x0, x1, z0, z1, top, 'stair');
       }
@@ -458,6 +461,7 @@ export const worldRng = mulberry32(20240607);
       );
       deck.position.set(bx, 0.375, cz);
       deck.castShadow = true; deck.receiveShadow = true;
+      deck.userData.ground = true;
       staticGroup.add(deck);
       addBoxCollider(bx - 1.8, bx + 1.8, z0, z1, 0.55, 'bridge');
       [-1, 1].forEach(sd => {
@@ -493,7 +497,7 @@ export const worldRng = mulberry32(20240607);
     }
 
     export function addDock(x0, x1, z0, z1) {
-      addBoxMesh(staticGroup, x1 - x0, 0.3, z1 - z0, (x0 + x1) / 2, 0.3, (z0 + z1) / 2, 0xA16207);
+      addBoxMesh(staticGroup, x1 - x0, 0.3, z1 - z0, (x0 + x1) / 2, 0.3, (z0 + z1) / 2, 0xA16207).userData.ground = true;
       addBoxMesh(staticGroup, x1 - x0, 0.06, 0.12, (x0 + x1) / 2, 0.47, z0 + 0.5, 0xC98B45, false);
       addBoxMesh(staticGroup, x1 - x0, 0.06, 0.12, (x0 + x1) / 2, 0.47, z1 - 0.5, 0xC98B45, false);
       addBoxCollider(x0, x1, z0, z1, 0.45, 'dock');
@@ -628,7 +632,7 @@ export const worldRng = mulberry32(20240607);
       }
 
       // lantai labirin
-      addBoxMesh(staticGroup, cs * n, 0.05, cs * n, MAZE.cx, 0.03, MAZE.cz, 0xFEF3C7, false);
+      addBoxMesh(staticGroup, cs * n, 0.05, cs * n, MAZE.cx, 0.03, MAZE.cz, 0xFEF3C7, false).userData.ground = true;
 
       const walls = [];
       for (let j = 0; j <= n; j++) for (let i = 0; i < n; i++) if (hW[j][i]) {
@@ -698,6 +702,7 @@ export const worldRng = mulberry32(20240607);
       geos[2].translate(0, 4.6, 0);
       const mat = new THREE.MeshLambertMaterial({ color: 0xFFFFFF });
       const meshes = geos.map(g => makeInstanced(g, mat, n, true, false));
+      meshes.forEach(m => { m.userData.castShadow = true; });
       const crownCols = [0x22C55E, 0x16A34A, 0x84CC16, 0x4ADE80];
       treeSpots.forEach((t, i) => {
         _dummy.position.set(t.x, 0, t.z);
@@ -988,6 +993,7 @@ export const worldRng = mulberry32(20240607);
       {
         const g = new THREE.BoxGeometry(2.2, 0.08, 2.2); g.translate(0, 0.04, 0);
         const m = makeInstanced(g, new THREE.MeshLambertMaterial({ color: 0xFFFFFF }), tileCenters.length, false, true);
+        m.userData.ground = true;
         const c1 = new THREE.Color(0xFDE9C0), c2 = new THREE.Color(0xF6D9A3);
         tileCenters.forEach(([x, z], i) => {
           _dummy.position.set(x, 0, z);
@@ -1110,6 +1116,14 @@ export const worldRng = mulberry32(20240607);
       buildBushes();
       buildRocks();
       buildFlowers();
+
+      // Kebijakan bayangan: hanya pohon (dan karakter/zombie di luar dunia statis) yang
+      // membuat bayangan; hanya permukaan tanah yang menerima bayangan.
+      [staticGroup, dynGroup].forEach(g => g.traverse(o => {
+        if (!o.isMesh) return;
+        o.castShadow = !!o.userData.castShadow;
+        o.receiveShadow = !!o.userData.ground;
+      }));
 
       // Bekukan matriks benda diam agar ringan di tablet
       staticGroup.traverse(o => {

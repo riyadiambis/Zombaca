@@ -45,11 +45,13 @@ import {
 const canvas = document.getElementById('game-canvas');
 sceneRefs.canvas = canvas;
 
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+// Layar padat (dpr >= 1.5) sudah cukup halus tanpa MSAA; pixel ratio dibatasi 1.5
+const deviceDpr = window.devicePixelRatio || 1;
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: deviceDpr < 1.5, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(deviceDpr, 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 sceneRefs.renderer = renderer;
 
 const scene = new THREE.Scene();
@@ -71,19 +73,32 @@ const hemiLight = new THREE.HemisphereLight(0xFFFFFF, 0x4ADE80, 0.82);
 hemiLight.position.set(0, 50, 0);
 scene.add(hemiLight);
 
+// Satu DirectionalLight; kotak bayangan ±28 unit yang mengikuti pemain
+const SHADOW_HALF = 28;
+const SHADOW_TEXEL = (SHADOW_HALF * 2) / 1024;
 const dirLight = new THREE.DirectionalLight(0xFFFBEB, 0.88);
 dirLight.position.set(24, 46, 26);
 dirLight.castShadow = true;
 dirLight.shadow.mapSize.width = 1024;
 dirLight.shadow.mapSize.height = 1024;
 dirLight.shadow.camera.near = 5;
-dirLight.shadow.camera.far = 130;
-const sdSize = 42;
-dirLight.shadow.camera.left = -sdSize;
-dirLight.shadow.camera.right = sdSize;
-dirLight.shadow.camera.top = sdSize;
-dirLight.shadow.camera.bottom = -sdSize;
+dirLight.shadow.camera.far = 110;
+dirLight.shadow.camera.left = -SHADOW_HALF;
+dirLight.shadow.camera.right = SHADOW_HALF;
+dirLight.shadow.camera.top = SHADOW_HALF;
+dirLight.shadow.camera.bottom = -SHADOW_HALF;
 scene.add(dirLight);
+scene.add(dirLight.target);
+sceneRefs.dirLight = dirLight;
+
+// Pusat bayangan dibulatkan ke ukuran texel agar tepi bayangan tidak berkedip saat bergerak
+function updateShadowCenter(x, z) {
+  const cx = Math.round(x / SHADOW_TEXEL) * SHADOW_TEXEL;
+  const cz = Math.round(z / SHADOW_TEXEL) * SHADOW_TEXEL;
+  dirLight.position.set(cx + 24, 46, cz + 26);
+  dirLight.target.position.set(cx, 0, cz);
+}
+updateShadowCenter(0, 6);
 
 // Lingkaran Target Berkedip
 const targetRingMesh = new THREE.Mesh(
@@ -257,6 +272,7 @@ function tick() {
       }
     }
 
+    updateShadowCenter(0, 6);
     updateZombies(dt, false);
     updateParticles(dt);
     updateHoppingAnimals(dt);
@@ -449,6 +465,12 @@ function tick() {
 
   // Kamera diperbarui sebelum zombie supaya papan huruf menghadap kamera frame ini
   updateCamera(dt, true);
+  // Bayangan dipusatkan sedikit di depan pemain (arah pandang kamera)
+  if (cameraState.mode === 'shoulder') {
+    updateShadowCenter(playerState.x + Math.sin(camControl.yaw) * 8, playerState.z + Math.cos(camControl.yaw) * 8);
+  } else {
+    updateShadowCenter(playerState.x, playerState.z - 8);
+  }
 
   // Update Zombies
   updateZombies(dt, true);

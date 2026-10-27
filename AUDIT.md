@@ -23,7 +23,8 @@ Branch kerja: `perf-audit`.
 Catatan metrik:
 - "CPU ms" = waktu kerja JavaScript per frame di dalam game loop (logika + submit render). Ini proksi
   terbaik untuk perangkat lemah, karena di laptop uji FPS sudah mentok di vsync 60.
-- Draw call adalah nilai `renderer.info.render.calls` (termasuk pass bayangan).
+- Draw call adalah nilai `renderer.info.render.calls`. Di r128 info di-reset **setelah** pass bayangan,
+  jadi angka ini hanya pass utama; jumlah mesh yang ikut pass bayangan dicatat terpisah.
 
 Perangkat uji: laptop Windows 11, GPU AMD Radeon (integrated, ANGLE D3D11), Chrome,
 viewport 2400x1318 CSS px dengan devicePixelRatio 0.8 (kanvas 1920x1054 px), layar 60 Hz.

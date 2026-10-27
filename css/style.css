@@ -746,6 +746,66 @@
       background: rgba(255,255,255,0.22);
     }
 
+    /* Pilihan Grafis di Menu Kamera */
+    .cam-menu-header.gfx-header {
+      margin-top: 4px;
+      padding-top: 8px;
+      padding-bottom: 0;
+      border-top: 1px solid var(--kaca-garis);
+      border-bottom: none;
+    }
+
+    .gfx-btn-row {
+      display: flex;
+      gap: 6px;
+    }
+
+    .gfx-btn {
+      flex: 1;
+      background: rgba(255,255,255,0.08);
+      border: 2px solid var(--kaca-garis);
+      border-radius: 12px;
+      color: var(--teks);
+      font-family: 'Fredoka', sans-serif;
+      font-weight: 700;
+      font-size: 0.85rem;
+      padding: 8px 4px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .gfx-btn:hover {
+      background: rgba(255,255,255,0.18);
+    }
+
+    .gfx-btn.active {
+      border: 2px solid transparent;
+      background:
+        linear-gradient(rgba(32, 26, 68, 0.9), rgba(32, 26, 68, 0.9)) padding-box,
+        linear-gradient(135deg, var(--limau), var(--cyan)) border-box;
+      box-shadow: 0 0 14px rgba(163, 230, 53, 0.45);
+    }
+
+    .gfx-note {
+      font-size: 0.74rem;
+      color: var(--teks-redup);
+      text-align: center;
+    }
+
+    /* Grafis Ringan: tanpa backdrop-filter, latar semi-solid sebagai gantinya */
+    body.gfx-low .glass-panel,
+    body.gfx-low .mission-pill,
+    body.gfx-low .cam-menu-popup,
+    body.gfx-low .confirm-modal-overlay {
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+    body.gfx-low .glass-panel { background: rgba(32, 26, 68, 0.92); }
+    body.gfx-low .mission-pill { background: rgba(20, 16, 45, 0.82); }
+    body.gfx-low .cam-menu-popup { background: rgba(20, 16, 45, 0.96); }
+    body.gfx-low .confirm-modal-overlay { background: rgba(15, 23, 42, 0.88); }
+    body.gfx-low .blur-orb { animation: none; }
+
     /* Indikator Ronde Kecil di Bawah Misi */
     .round-progress-text {
       width: 100%;

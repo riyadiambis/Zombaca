@@ -135,9 +135,9 @@ export async function initDebug() {
   document.body.appendChild(panelEl);
 
   // Kait untuk otomatisasi pengukuran skenario dari console
-  const [state, ui, weapons, zombiesMod, camera] = await Promise.all([
+  const [state, ui, weapons, zombiesMod, camera, quality] = await Promise.all([
     import('./state.js'), import('./ui.js'), import('./weapons.js'),
-    import('./zombies.js'), import('./camera.js')
+    import('./zombies.js'), import('./camera.js'), import('./quality.js')
   ]);
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const memSnap = () => {
@@ -206,7 +206,7 @@ export async function initDebug() {
   const errors = [];
   window.addEventListener('error', e => errors.push(e.message));
   window.__zombaca = {
-    state, ui, weapons, zombies: zombiesMod, camera,
+    state, ui, weapons, zombies: zombiesMod, camera, quality,
     stats: readRendererStats,
     errors,
     async run(name) {

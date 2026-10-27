@@ -839,6 +839,16 @@ export const worldRng = mulberry32(20240607);
       return out;
     }
 
+    // Dekorasi kecil yang dikurangi setengah di grafis Ringan: { mesh, full }
+    export const decorMeshes = [];
+
+    // Slot instance berselang-seling: titik genap mengisi separuh pertama, sehingga
+    // memotong count menjadi setengah tetap menyebar merata ke semua zona.
+    function halfFirstSlot(i, n) {
+      const half = Math.ceil(n / 2);
+      return i % 2 === 0 ? i / 2 : half + (i - 1) / 2;
+    }
+
     export function buildBushes() {
       let pts = [];
       pts = pts.concat(scatterPoints(44, -46, -12, 27, 32, 2.2, 0.8, 2.4, 4, 1.4));
@@ -859,10 +869,15 @@ export const worldRng = mulberry32(20240607);
         _dummy.rotation.set(0, worldRng() * 3, 0);
         _dummy.scale.set(s, s, s);
         _dummy.updateMatrix();
-        mA.setMatrixAt(i, _dummy.matrix); mA.setColorAt(i, new THREE.Color(cA[i % 3]));
-        mB.setMatrixAt(i, _dummy.matrix); mB.setColorAt(i, new THREE.Color(cB[i % 3]));
+        const slot = halfFirstSlot(i, n);
+        mA.setMatrixAt(slot, _dummy.matrix); mA.setColorAt(slot, new THREE.Color(cA[i % 3]));
+        mB.setMatrixAt(slot, _dummy.matrix); mB.setColorAt(slot, new THREE.Color(cB[i % 3]));
       });
-      [mA, mB].forEach(m => { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; });
+      [mA, mB].forEach(m => {
+        m.instanceMatrix.needsUpdate = true;
+        if (m.instanceColor) m.instanceColor.needsUpdate = true;
+        decorMeshes.push({ mesh: m, full: n });
+      });
     }
 
     export function buildFlowers() {
@@ -880,10 +895,15 @@ export const worldRng = mulberry32(20240607);
         _dummy.rotation.set(0, 0, 0);
         _dummy.scale.set(1, 1, 1);
         _dummy.updateMatrix();
-        ms.setMatrixAt(i, _dummy.matrix); ms.setColorAt(i, green);
-        mh.setMatrixAt(i, _dummy.matrix); mh.setColorAt(i, new THREE.Color(hc[i % hc.length]));
+        const slot = halfFirstSlot(i, n);
+        ms.setMatrixAt(slot, _dummy.matrix); ms.setColorAt(slot, green);
+        mh.setMatrixAt(slot, _dummy.matrix); mh.setColorAt(slot, new THREE.Color(hc[i % hc.length]));
       });
-      [ms, mh].forEach(m => { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; });
+      [ms, mh].forEach(m => {
+        m.instanceMatrix.needsUpdate = true;
+        if (m.instanceColor) m.instanceColor.needsUpdate = true;
+        decorMeshes.push({ mesh: m, full: n });
+      });
     }
 
     export function buildRocks() {

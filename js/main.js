@@ -34,6 +34,7 @@ import {
 } from './camera.js';
 import { initControls } from './controls.js';
 import { initDebug, debugFrame, debugResetTiming } from './debug.js';
+import { wantsAntialias, applyQuality, qualityState, updateAutoQuality } from './quality.js';
 import {
   initUI, buildMinimapBase, renderMinimap, updateStarHUD,
   announceCurrentTarget, showToast
@@ -45,10 +46,9 @@ import {
 const canvas = document.getElementById('game-canvas');
 sceneRefs.canvas = canvas;
 
-// Layar padat (dpr >= 1.5) sudah cukup halus tanpa MSAA; pixel ratio dibatasi 1.5
-const deviceDpr = window.devicePixelRatio || 1;
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: deviceDpr < 1.5, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(deviceDpr, 1.5));
+// MSAA mengikuti pilihan grafis (lihat quality.js); pixel ratio diatur applyQuality()
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: wantsAntialias(), powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -211,7 +211,8 @@ function setShootInRange(inRange) {
 
 // Mengembalikan true bila frame ini benar-benar dirender
 function tick() {
-  frameAccum += clock.getDelta();
+  const rawDelta = clock.getDelta();
+  frameAccum += rawDelta;
   const isPlaying = gameStateRef.current === 'PLAYING';
   // Di menu / layar akhir cukup 30 fps
   if (!isPlaying && frameAccum < MENU_FRAME_TIME - 0.002) return false;
@@ -281,6 +282,11 @@ function tick() {
   }
 
   /**************** STATE BERMAIN (PLAYING) ****************/
+  // Grafis Otomatis: ukur FPS 5 detik pertama bermain, turunkan ke Ringan bila < 45
+  if (updateAutoQuality(rawDelta)) {
+    showToast('Grafis disesuaikan supaya lancar');
+  }
+
   if (playerState.shootCooldown > 0) playerState.shootCooldown -= dt;
   if (playerState.toolSwingTimer > 0) playerState.toolSwingTimer -= dt;
   if (screenState.shakeTime > 0) screenState.shakeTime -= dt;
@@ -537,6 +543,7 @@ window.addEventListener('resize', () => {
 // Inisialisasi Game
 async function initGame() {
   buildWorld();
+  applyQuality(qualityState.pref === 'ringan' ? 'ringan' : 'tinggi');
   buildMinimapBase();
   applyCamModeUI(true);
   await initLetterTextures();

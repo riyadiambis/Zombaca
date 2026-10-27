@@ -11,6 +11,7 @@ import { islandRadiusAt, worldInfo, riverCenterZ } from './world.js';
 import { playSound, speakText, getLetterSpokenName, toggleMusic } from './audio.js';
 import { rebuildPlayerModel, refreshPreviewHatsAndTools } from './characters.js';
 import { resetCameraBehindPlayer, toggleCamMenu, setCameraMode } from './camera.js';
+import { qualityState, setQualityPref } from './quality.js';
 import {
   getNeededLetter, clearAllZombies, spawnZombie,
   ensureCorrectLetterAmongZombies, reshuffleAllZombieLetters
@@ -475,6 +476,20 @@ export     const screens = {
       updateHatButtonsUI();
     }
 
+    // Tombol Grafis: Otomatis / Ringan / Tinggi
+    export function updateGfxButtonsUI() {
+      document.querySelectorAll('#gfx-btn-row .gfx-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.gfx === qualityState.pref);
+      });
+      const note = document.getElementById('gfx-note');
+      if (note) {
+        const activeName = qualityState.active === 'ringan' ? 'Ringan' : 'Tinggi';
+        note.textContent = qualityState.pref === 'auto'
+          ? `Otomatis memakai: ${activeName}`
+          : `Grafis ${activeName}`;
+      }
+    }
+
     export function updateHatButtonsUI() {
       document.querySelectorAll('#hat-selector .hat-btn').forEach(btn => {
         const cost = parseInt(btn.dataset.cost, 10);
@@ -836,6 +851,16 @@ export function initUI() {
         showToast('Kamera diatur ulang ke belakang pemain! ↺');
       });
     }
+
+    document.querySelectorAll('#gfx-btn-row .gfx-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        playSound('click');
+        setQualityPref(btn.dataset.gfx);
+        updateGfxButtonsUI();
+      });
+    });
+    // Popup menu kamera dibuka: tampilkan status grafis terbaru (hasil Otomatis bisa berubah)
+    if (btnHudCam) btnHudCam.addEventListener('click', updateGfxButtonsUI);
 
     const btnRepeatVoice = document.getElementById('btn-repeat-voice');
     if (btnRepeatVoice) {

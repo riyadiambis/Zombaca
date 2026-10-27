@@ -869,6 +869,7 @@ export const worldRng = mulberry32(20240607);
       );
       oceanMesh.position.y = -1.8;
       sceneRefs.scene.add(oceanMesh);
+      sceneRefs.oceanMesh = oceanMesh;
 
       [[3.0, 4.0], [5.6, 6.4]].forEach(([a, b]) => {
         const outer = new THREE.Shape(islandPoints(b));
@@ -881,6 +882,7 @@ export const worldRng = mulberry32(20240607);
         ring.position.y = -0.65;
         sceneRefs.scene.add(ring);
         waveRingMeshes.push(ring);
+        sceneRefs.waveRingMeshes.push(ring);
       });
 
       // 2. Pulau tidak bulat: pasir (bawah) + rumput (atas)

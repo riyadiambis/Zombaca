@@ -8,7 +8,7 @@ import {
 } from './state.js';
 import {
   isFreeSpot, findNearestLand, nearWater, resolveColliders,
-  getSupport, lerpAngle
+  getSupport, lerpAngle, clampToMaze
 } from './world.js';
 import { playSound } from './audio.js';
 import { spawnPuffParticles } from './weapons.js';
@@ -524,15 +524,14 @@ export function updateZombies(dt, isPlaying = true) {
 
     // Zombie Labirin Terkunci di Labirin
     if (z.inMaze) {
-      z.x = THREE.MathUtils.clamp(z.x, 34, 58);
-      z.z = THREE.MathUtils.clamp(z.z, 36, 60);
+      clampToMaze(z);
     }
 
     // Resolusi Tabrakan Mendatar Zombie dengan Tangga & Rintangan
-    resolveColliders(z.x, z.y, z.z, 0.65, 1.8, STEP_H);
+    resolveColliders(z, z.y, 0.65);
 
     // Ketinggian Kaki Zombie Sesuai Pijakan
-    const zSupp = getSupport(z.x, z.y, z.z, 0.65, STEP_H);
+    const zSupp = getSupport(z.x, z.z, z.y);
     z.y = zSupp.h;
 
     // Interpolasi Sudut Terpendek

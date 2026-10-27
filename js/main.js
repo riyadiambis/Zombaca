@@ -9,15 +9,16 @@ import {
   saveState, roundState, playerState, selectionState,
   gameStateRef, cameraState, camControl, screenState, totalTimeRef,
   sceneRefs, playerRescue, touchState, keys, joyVector,
-  rafts, trampolines, setOcclusionRaycaster
+  zombies, setOcclusionRaycaster
 } from './state.js';
 import {
   buildWorld, islandRadiusAt, isWaterAt, findNearestLand,
-  resolveColliders, getSupport, lerpAngle, normalizeAngle
+  resolveColliders, getSupport, lerpAngle, normalizeAngle,
+  updateRafts, updateTramps
 } from './world.js';
 import { playSound, speakText, ensureAudioContext } from './audio.js';
 import {
-  initLetterTextures, createStartWavingZombie, updateZombies
+  initLetterTextures, createStartWavingZombie, updateZombies, getNeededLetter
 } from './zombies.js';
 import {
   rebuildPlayerModel, initCharacterPreviews, previewConfigs,
@@ -143,7 +144,12 @@ const clock = new THREE.Clock();
 
 function animate() {
   requestAnimationFrame(animate);
-  debugFrame();
+  const workStart = performance.now();
+  tick();
+  debugFrame(workStart);
+}
+
+function tick() {
 
   const dt = Math.min(clock.getDelta(), 0.05);
   totalTimeRef.t += dt;
@@ -158,39 +164,9 @@ function animate() {
     ring.scale.set(s, s, 1);
   });
 
-  // 2. Animasi Rakit Mengapung di Danau
-  rafts.forEach(r => {
-    r.phase += dt * r.speed;
-    const pingPong = (Math.sin(r.phase) + 1) * 0.5;
-    const newX = r.from.x + (r.to.x - r.from.x) * pingPong;
-    const newZ = r.from.z + (r.to.z - r.from.z) * pingPong;
-
-    r.currentDx = newX - r.mesh.position.x;
-    r.currentDz = newZ - r.mesh.position.z;
-
-    r.mesh.position.x = newX;
-    r.mesh.position.z = newZ;
-    r.mesh.position.y = 0.22 + Math.sin(totalTime * 3.5 + r.phase) * 0.04;
-    r.mesh.rotation.z = Math.sin(totalTime * 2.8 + r.phase) * 0.02;
-
-    if (r.collider) {
-      r.collider.cx = newX;
-      r.collider.cz = newZ;
-      r.collider.topY = r.mesh.position.y + 0.15;
-      r.collider.lowY = r.mesh.position.y - 0.4;
-    }
-  });
-
-  // 3. Animasi Trampolin Memantul (Pemulihan Skala)
-  trampolines.forEach(tr => {
-    if (tr.squashTimer > 0) {
-      tr.squashTimer -= dt;
-      const sc = 0.8 + Math.sin(tr.squashTimer * 20) * 0.2;
-      tr.mesh.scale.set(1.1, sc, 1.1);
-    } else {
-      tr.mesh.scale.set(1.0, 1.0, 1.0);
-    }
-  });
+  // 2. Animasi Rakit Mengapung di Danau & Trampolin Memantul
+  updateRafts(dt);
+  updateTramps(dt);
 
   // 4. Render Preview Karakter Berputar di Layar Pilih Karakter
   const charScreen = document.getElementById('screen-char');
@@ -332,11 +308,11 @@ function animate() {
     }
 
     if (playerState.standingRaft) {
-      playerState.x += playerState.standingRaft.currentDx;
-      playerState.z += playerState.standingRaft.currentDz;
+      playerState.x += playerState.standingRaft.dx;
+      playerState.z += playerState.standingRaft.dz;
     }
 
-    resolveColliders(playerState.x, playerState.y, playerState.z, 0.55, 1.8, STEP_H);
+    resolveColliders(playerState, playerState.y, 0.55);
 
     const curAngle = Math.atan2(playerState.z, playerState.x);
     const maxR = islandRadiusAt(curAngle) - 1.5;
@@ -349,28 +325,29 @@ function animate() {
     playerState.vy -= GRAVITY * dt;
     playerState.y += playerState.vy * dt;
 
-    const supp = getSupport(playerState.x, playerState.y, playerState.z, 0.55, STEP_H);
-    playerState.standingRaft = supp.raft || null;
+    const supp = getSupport(playerState.x, playerState.z, playerState.y);
+    const suppCol = supp.obj;
+    playerState.standingRaft = (suppCol && suppCol.raft && playerState.y <= supp.h + 0.05) ? suppCol.raft : null;
 
     if (playerState.y <= supp.h) {
       playerState.y = supp.h;
       playerState.vy = 0;
       playerState.isGrounded = true;
 
-      if (supp.type === 'tramp') {
+      if (suppCol && suppCol.kind === 'tramp') {
         playerState.vy = BOUNCE_VY;
         playerState.isGrounded = false;
         playSound('bounce');
         showToast('Boing! Melompat tinggi! 🦘');
         spawnPuffParticles(playerState.x, playerState.y, playerState.z, 12);
-        if (supp.trampRef) {
-          supp.trampRef.squashTimer = 0.35;
+        if (suppCol.tramp) {
+          suppCol.tramp.squash = 0.35;
         }
       }
 
-      if (supp.type === 'slide' && supp.slideDir) {
-        playerState.x += supp.slideDir.x * 12.0 * dt;
-        playerState.z += supp.slideDir.z * 12.0 * dt;
+      if (suppCol && suppCol.slideDir) {
+        playerState.x += suppCol.slideDir.x * 12.0 * dt;
+        playerState.z += suppCol.slideDir.z * 12.0 * dt;
       }
     } else {
       playerState.isGrounded = false;
@@ -435,6 +412,19 @@ function animate() {
   if (roundState.targetTimer >= 15 && !roundState.hintActive) {
     roundState.hintActive = true;
     announceCurrentTarget();
+  }
+  if (roundState.hintActive) {
+    const neededLetter = getNeededLetter();
+    const correctZ = zombies.find(z => z.letter === neededLetter);
+    if (correctZ) {
+      helpArrowGroup.visible = true;
+      helpArrowGroup.position.set(playerState.x, playerState.y + 3.6 + Math.sin(totalTime * 6) * 0.2, playerState.z);
+      helpArrowGroup.rotation.y = Math.atan2(correctZ.x - playerState.x, correctZ.z - playerState.z);
+    } else {
+      helpArrowGroup.visible = false;
+    }
+  } else {
+    helpArrowGroup.visible = false;
   }
 
   // Update Proyektil & Partikel

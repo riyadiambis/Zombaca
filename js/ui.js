@@ -13,7 +13,7 @@ import { rebuildPlayerModel, refreshPreviewHatsAndTools } from './characters.js'
 import { resetCameraBehindPlayer, toggleCamMenu, setCameraMode } from './camera.js';
 import {
   getNeededLetter, clearAllZombies, spawnZombie,
-  ensureCorrectLetterAmongZombies
+  ensureCorrectLetterAmongZombies, reshuffleAllZombieLetters
 } from './zombies.js';
 
 export let minimapCanvas = null;
@@ -367,7 +367,7 @@ let miniMapBgCanvas = null;
       roundState.letterIndex = 0;
       roundState.targetTimer = 0;
       roundState.hintActive = false;
-      helpArrowGroup.visible = false;
+      sceneRefs.helpArrowGroup.visible = false;
 
       renderMissionHUD();
       reshuffleAllZombieLetters();

@@ -332,6 +332,27 @@ export const worldRng = mulberry32(20240607);
       }
       return false;
     }
+    // Seperti blockedAtGround, tetapi pijakan yang bisa dinaiki dari ketinggian y
+    // (undakan, tangga, dermaga) tidak dihitung sebagai penghalang
+    export function blockedForWalker(x, z, r, y) {
+      const list = queryColliders(x - r, x + r, z - r, z + r);
+      const maxTop = y + STEP_H;
+      for (let i = 0; i < list.length; i++) {
+        const c = list[i];
+        if (c.raft || c.top <= maxTop) continue;
+        if (c.t === 1) {
+          const rr = c.r + r;
+          const dx = x - c.x, dz = z - c.z;
+          if (dx * dx + dz * dz < rr * rr) return true;
+        } else {
+          const cx = x < c.x0 ? c.x0 : (x > c.x1 ? c.x1 : x);
+          const cz = z < c.z0 ? c.z0 : (z > c.z1 ? c.z1 : z);
+          const dx = x - cx, dz = z - cz;
+          if (dx * dx + dz * dz < r * r) return true;
+        }
+      }
+      return false;
+    }
     export function isFreeSpot(x, z, r) {
       return insideIsland(x, z, 3.2) && !nearWater(x, z, r + 0.8) && !blockedAtGround(x, z, r);
     }

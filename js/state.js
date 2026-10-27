@@ -170,6 +170,8 @@ export const keys = {};
 export const joyVector = { x: 0, y: 0 };
 export const touchState = {
   joyTouchId: null,
+  joyOriginX: 0,
+  joyOriginY: 0,
   isMouseDraggingCam: false,
   lastMouseX: 0,
   lastMouseY: 0,

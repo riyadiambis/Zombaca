@@ -1,14 +1,14 @@
 /*************************************************************************
  * ZOMBIES.JS - Zombie Lucu, AI, Papan Huruf Billboard, & Hewan Balok
  *************************************************************************/
-import { ALLOWED_LETTERS, MODE_CONFIG, MAZE, ZONES, STEP_H } from './config.js';
+import { ALLOWED_LETTERS, MODE_CONFIG, MAZE, ZONES, STEP_H, PLAYER_SPEED } from './config.js';
 import {
   zombies, playerState, roundState, selectionState, screenState,
   totalTimeRef, sceneRefs, playerRescue
 } from './state.js';
 import {
   isFreeSpot, findNearestLand, nearWater, resolveColliders,
-  getSupport, lerpAngle, clampToMaze
+  getSupport, lerpAngle, clampToMaze, insideIsland, blockedForWalker
 } from './world.js';
 import { playSound } from './audio.js';
 import { spawnPuffParticles } from './weapons.js';
@@ -376,6 +376,7 @@ export function getLetterCanvasTexture(letter) {
       const model = createCuteZombieMesh(letter);
 
       // Tentukan posisi muncul di salah satu dari 5 zona pulau luas
+      // Syarat: minimal 15 unit dari pemain dan minimal 8 unit dari zombie lain
       let zx = 0, zz = 12;
       let inMaze = false;
 
@@ -390,22 +391,46 @@ export function getLetterCanvasTexture(letter) {
         let zIdx = zoneHint >= 0 ? (zoneHint % ZONES.length) : Math.floor(Math.random() * ZONES.length);
         const zn = ZONES[zIdx];
         let foundSpot = false;
-        for (let tries = 0; tries < 30; tries++) {
+
+        for (let tries = 0; tries < 50; tries++) {
           const a = Math.random() * Math.PI * 2;
           const r = Math.sqrt(Math.random()) * Math.min(zn.rx, zn.rz);
           const px = zn.x + Math.cos(a) * r;
           const pz = zn.z + Math.sin(a) * r;
-          if (isFreeSpot(px, pz, 1.0) && Math.hypot(px - playerState.x, pz - playerState.z) > 7) {
+          const distToPlayer = Math.hypot(px - playerState.x, pz - playerState.z);
+          const tooCloseToOther = zombies.some(other => Math.hypot(px - other.x, pz - other.z) < 8.0);
+
+          if (distToPlayer >= 15.0 && !tooCloseToOther && isFreeSpot(px, pz, 1.0)) {
             zx = px;
             zz = pz;
             foundSpot = true;
             break;
           }
         }
+
+        // Fallback: cari di zona lain bila zona saat ini padat
         if (!foundSpot) {
-          const land = findNearestLand(zn.x, zn.z);
-          zx = land.x;
-          zz = land.z;
+          for (let fTries = 0; fTries < 40; fTries++) {
+            const altZone = ZONES[Math.floor(Math.random() * ZONES.length)];
+            const a = Math.random() * Math.PI * 2;
+            const r = Math.sqrt(Math.random()) * Math.min(altZone.rx, altZone.rz);
+            const px = altZone.x + Math.cos(a) * r;
+            const pz = altZone.z + Math.sin(a) * r;
+            const distToPlayer = Math.hypot(px - playerState.x, pz - playerState.z);
+            const tooCloseToOther = zombies.some(other => Math.hypot(px - other.x, pz - other.z) < 8.0);
+
+            if (distToPlayer >= 15.0 && !tooCloseToOther && isFreeSpot(px, pz, 1.0)) {
+              zx = px;
+              zz = pz;
+              foundSpot = true;
+              break;
+            }
+          }
+          if (!foundSpot) {
+            const land = findNearestLand(zn.x, zn.z);
+            zx = land.x;
+            zz = land.z;
+          }
         }
       }
 
@@ -413,7 +438,7 @@ export function getLetterCanvasTexture(letter) {
       sceneRefs.scene.add(model.root);
       spawnPuffParticles(zx, 1.2, zz, 10);
 
-      const initialAngle = Math.atan2(playerState.x - zx, playerState.z - zz);
+      const initialAngle = Math.atan2(playerState.x - zx, playerState.z - zz) + Math.PI; // hadap menjauh/netral
       model.root.rotation.y = initialAngle;
 
       zombies.push({
@@ -427,9 +452,17 @@ export function getLetterCanvasTexture(letter) {
         targetRotY: initialAngle,
         moveDirX: Math.sin(initialAngle),
         moveDirZ: Math.cos(initialAngle),
+        state: 'WANDER', // 'WANDER' | 'FLEE' | 'TIRED'
         wanderTimer: 1.5 + Math.random() * 2.5,
         pauseTimer: 0,
+        actionTimer: 0,
+        actionType: 'none',
         fleeTimer: 0,
+        tiredTimer: 0,
+        fleeCooldown: 0,
+        sweatTimer: 0,
+        lastLaughTime: 0,
+        zigzagPhase: Math.random() * Math.PI * 2,
         walkPhase: Math.random() * 10,
         inMaze
       });
@@ -444,6 +477,37 @@ export function getLetterCanvasTexture(letter) {
 
 
 // Update Perilaku & Animasi Semua Zombie
+// ---------- Arah kabur yang aman ----------
+const FLEE_STEER_INTERVAL = 0.125;
+const FLEE_LOOK_AHEAD = 2.6;
+// Belokan yang dicoba berurutan: lurus, lalu makin menyamping (maks ~160 derajat)
+const FLEE_OFFSETS = [0, Math.PI * 0.3, Math.PI * 0.5, Math.PI * 0.7, Math.PI * 0.9];
+
+function fleeSpotOk(x, z, zb) {
+  if (!zb.inMaze && (!insideIsland(x, z, 3.2) || nearWater(x, z, 2.2))) return false;
+  return !blockedForWalker(x, z, 0.85, zb.y);
+}
+
+// Mengembalikan sudut belok (radian) dari arah menjauhi pemain, atau null bila terpojok.
+// Sisi belokan sebelumnya diutamakan agar zombie tidak goyang kiri-kanan di depan rintangan.
+function chooseFleeOffset(z, baseAngle) {
+  const prevSide = z.steerOffset > 0 ? 1 : (z.steerOffset < 0 ? -1 : 0);
+  for (let k = 0; k < FLEE_OFFSETS.length; k++) {
+    const off = FLEE_OFFSETS[k];
+    if (off === 0) {
+      if (fleeSpotOk(z.x + Math.sin(baseAngle) * FLEE_LOOK_AHEAD, z.z + Math.cos(baseAngle) * FLEE_LOOK_AHEAD, z)) return 0;
+      continue;
+    }
+    const first = prevSide !== 0 ? prevSide : (Math.random() < 0.5 ? 1 : -1);
+    for (let s = 0; s < 2; s++) {
+      const side = s === 0 ? first : -first;
+      const a = baseAngle + off * side;
+      if (fleeSpotOk(z.x + Math.sin(a) * FLEE_LOOK_AHEAD, z.z + Math.cos(a) * FLEE_LOOK_AHEAD, z)) return off * side;
+    }
+  }
+  return null;
+}
+
 export function updateZombies(dt, isPlaying = true) {
   if (!isPlaying) {
     zombies.forEach(z => {
@@ -472,48 +536,157 @@ export function updateZombies(dt, isPlaying = true) {
   for (let i = 0; i < zombies.length; i++) {
     const z = zombies[i];
     const prevX = z.x, prevZ = z.z;
+    const isCorrectLetter = (z.letter === neededLetter);
+
+    // Cooldown kabur
+    if (z.fleeCooldown > 0) z.fleeCooldown -= dt;
+
+    // Bantuan Otomatis (setelah 15 detik): zombie huruf benar berhenti kabur & langsung capek sampai tertangkap
+    const hintHold = roundState.hintActive && isCorrectLetter;
+    if (hintHold) {
+      z.state = 'TIRED';
+      z.hintTired = true;
+    } else if (z.hintTired) {
+      // Bantuan selesai (target berganti): capek biasa lalu kembali jalan-jalan
+      z.hintTired = false;
+      z.tiredTimer = modeCfg.tiredDuration;
+    }
+
     const dxToPlayer = playerState.x - z.x;
     const dzToPlayer = playerState.z - z.z;
     const distToPlayer = Math.hypot(dxToPlayer, dzToPlayer);
+
     let isMoving = false;
     let currentMoveSpeed = 0;
 
-    if (z.fleeTimer > 0) {
-      z.fleeTimer -= dt;
-      currentMoveSpeed = modeCfg.speed * 1.45;
-      z.x += z.moveDirX * currentMoveSpeed * dt;
-      z.z += z.moveDirZ * currentMoveSpeed * dt;
-      z.targetRotY = Math.atan2(z.moveDirX, z.moveDirZ);
-      isMoving = true;
-    } else if (modeCfg.chaseDist > 0 && distToPlayer < modeCfg.chaseDist && !z.inMaze) {
-      if (distToPlayer > 0.01) {
-        z.moveDirX = dxToPlayer / distToPlayer;
-        z.moveDirZ = dzToPlayer / distToPlayer;
+    // 1. TRANSISI STATE MACHINE
+    if (z.state === 'WANDER') {
+      // Masuk jarak waspada -> kabur menjauh sambil tertawa
+      if (distToPlayer < modeCfg.alertDist && z.fleeCooldown <= 0 && !hintHold) {
+        z.state = 'FLEE';
+        z.fleeTimer = modeCfg.fleeDuration;
+        z.zigzagPhase = Math.random() * Math.PI * 2;
+        if (!z.lastLaughTime || totalTimeRef.t - z.lastLaughTime > 3.0) {
+          playSound('tickle');
+          z.lastLaughTime = totalTimeRef.t;
+        }
       }
-      currentMoveSpeed = modeCfg.speed;
-      z.x += z.moveDirX * currentMoveSpeed * dt;
-      z.z += z.moveDirZ * currentMoveSpeed * dt;
+    } else if (z.state === 'FLEE') {
+      z.fleeTimer -= dt;
+      if (z.fleeTimer <= 0) {
+        // Selesai kabur -> masuk fase CAPEK
+        z.state = 'TIRED';
+        const extraTired = isCorrectLetter ? 1.0 : 0.0;
+        z.tiredTimer = modeCfg.tiredDuration + extraTired;
+        z.sweatTimer = 0;
+      }
+    } else if (z.state === 'TIRED') {
+      if (!hintHold) {
+        z.tiredTimer -= dt;
+        if (z.tiredTimer <= 0) {
+          // Selesai capek -> kembali jalan-jalan
+          z.state = 'WANDER';
+          z.wanderTimer = 2.0 + Math.random() * 2.5;
+          z.pauseTimer = 0;
+          z.fleeCooldown = 2.5; // jeda sebelum bisa kabur lagi
+        }
+      }
+    }
+
+    // 2. LOGIKA GERAK & ANIMASI SESUAI STATE
+    if (z.state === 'FLEE') {
+      // Kecepatan kabur: zombie huruf benar 80% dari kecepatan mode, tidak melebihi kecepatan pemain
+      let fleeSpeed = PLAYER_SPEED * modeCfg.fleeRatio;
+      if (isCorrectLetter) fleeSpeed *= 0.8;
+      fleeSpeed = Math.min(fleeSpeed, PLAYER_SPEED);
+
+      // Arah dasar: menjauh dari pemain
+      let fleeAngle = Math.atan2(z.x - playerState.x, z.z - playerState.z);
+
+      // Mode Seru: zig-zag
+      if (modeCfg.zigzag) {
+        z.zigzagPhase += dt * 8.0;
+        fleeAngle += Math.sin(z.zigzagPhase) * 0.55;
+      }
+
+      // Hindari air, rintangan, rumah & tepi pulau. Dicek 8x per detik
+      // (bukan tiap frame); belokan terpilih dipakai sampai cek berikutnya.
+      z.steerTimer = (z.steerTimer || 0) - dt;
+      if (z.steerTimer <= 0) {
+        z.steerTimer = FLEE_STEER_INTERVAL;
+        z.steerOffset = chooseFleeOffset(z, fleeAngle);
+      }
+
+      if (z.steerOffset === null) {
+        // Terpojok di semua arah: berhenti dan langsung capek (tidak berbalik ke arah pemain)
+        z.state = 'TIRED';
+        z.tiredTimer = modeCfg.tiredDuration + (isCorrectLetter ? 1.0 : 0.0);
+        z.sweatTimer = 0;
+        z.steerOffset = 0;
+      } else {
+        fleeAngle += z.steerOffset;
+        z.moveDirX = Math.sin(fleeAngle);
+        z.moveDirZ = Math.cos(fleeAngle);
+        z.x += z.moveDirX * fleeSpeed * dt;
+        z.z += z.moveDirZ * fleeSpeed * dt;
+        z.targetRotY = fleeAngle;
+        currentMoveSpeed = fleeSpeed;
+        isMoving = true;
+      }
+    }
+
+    if (z.state === 'TIRED') {
+      // Diam di tempat, terengah-engah menghadap ke pemain
+      currentMoveSpeed = 0;
+      isMoving = false;
       z.targetRotY = Math.atan2(dxToPlayer, dzToPlayer);
-      isMoving = true;
-    } else {
+
+      // Partikel keringat kecil / puff saat capek
+      z.sweatTimer += dt;
+      if (z.sweatTimer > 0.65) {
+        z.sweatTimer = 0;
+        spawnPuffParticles(z.x, z.y + 1.85, z.z, 2, [0x38BDF8, 0x67E8F9]);
+      }
+
+    } else if (z.state === 'WANDER') {
       if (z.pauseTimer > 0) {
         z.pauseTimer -= dt;
-        z.targetRotY = Math.atan2(dxToPlayer, dzToPlayer);
         isMoving = false;
+        currentMoveSpeed = 0;
+        z.actionTimer += dt;
+        if (z.actionType === 'wave') {
+          z.model.rightArm.rotation.x = -Math.PI * 0.85;
+          z.model.rightArm.rotation.z = Math.sin(z.actionTimer * 6) * 0.35;
+          z.model.leftArm.rotation.x = -Math.PI * 0.2;
+        } else if (z.actionType === 'dance') {
+          z.model.root.rotation.z = Math.sin(z.actionTimer * 5) * 0.14;
+          z.model.leftArm.rotation.x = -Math.PI * 0.5 + Math.sin(z.actionTimer * 5) * 0.3;
+          z.model.rightArm.rotation.x = -Math.PI * 0.5 - Math.sin(z.actionTimer * 5) * 0.3;
+        }
       } else {
         z.wanderTimer -= dt;
         if (z.wanderTimer <= 0) {
-          if (Math.random() < 0.35) {
-            z.pauseTimer = 1.0 + Math.random() * 1.2;
-            z.wanderTimer = 2.0 + Math.random() * 2.5;
+          if (Math.random() < 0.4) {
+            z.pauseTimer = 1.2 + Math.random() * 1.5;
+            z.wanderTimer = 2.5 + Math.random() * 3.0;
+            z.actionTimer = 0;
+            z.actionType = Math.random() < 0.5 ? 'wave' : 'dance';
           } else {
-            z.wanderTimer = 2.0 + Math.random() * 2.5;
-            const newAngle = Math.atan2(z.moveDirX, z.moveDirZ) + (Math.random() - 0.5) * 1.8;
+            z.wanderTimer = 2.5 + Math.random() * 3.0;
+            const newAngle = Math.atan2(z.moveDirX, z.moveDirZ) + (Math.random() - 0.5) * 1.6;
             z.moveDirX = Math.sin(newAngle);
             z.moveDirZ = Math.cos(newAngle);
+            z.actionType = 'none';
           }
         }
-        currentMoveSpeed = modeCfg.speed * 0.65;
+        // Jalan-jalan tidak pernah mengarah ke pemain yang sudah dekat
+        if (distToPlayer < modeCfg.alertDist + 6 && distToPlayer > 0.01 &&
+            (z.moveDirX * dxToPlayer + z.moveDirZ * dzToPlayer) > 0.3 * distToPlayer) {
+          const awayAngle = Math.atan2(-dxToPlayer, -dzToPlayer) + (Math.random() - 0.5) * 1.2;
+          z.moveDirX = Math.sin(awayAngle);
+          z.moveDirZ = Math.cos(awayAngle);
+        }
+        currentMoveSpeed = 1.6;
         z.x += z.moveDirX * currentMoveSpeed * dt;
         z.z += z.moveDirZ * currentMoveSpeed * dt;
         z.targetRotY = Math.atan2(z.moveDirX, z.moveDirZ);
@@ -521,33 +694,32 @@ export function updateZombies(dt, isPlaying = true) {
       }
     }
 
-    // Pemisahan Antar Zombie
+    // 3. PEMISAHAN ANTAR ZOMBIE: jarak < 4 unit saling dorong pelan menjauh
     for (let j = i + 1; j < zombies.length; j++) {
       const z2 = zombies[j];
       const sdx = z.x - z2.x;
       const sdz = z.z - z2.z;
       const sd = Math.hypot(sdx, sdz);
-      if (sd < 1.65 && sd > 0.001) {
-        const push = (1.65 - sd) * 0.5;
-        z.x += (sdx / sd) * push;
-        z.z += (sdz / sd) * push;
-        z2.x -= (sdx / sd) * push;
-        z2.z -= (sdz / sd) * push;
+      if (sd < 4.0 && sd > 0.001) {
+        const push = (4.0 - sd) * 0.5 * dt * 2.8;
+        const nx = sdx / sd;
+        const nz = sdz / sd;
+        z.x += nx * push;
+        z.z += nz * push;
+        z2.x -= nx * push;
+        z2.z -= nz * push;
       }
     }
 
-    // Zombie Dilarang Masuk Air & Dilarang Keluar Pulau
+    // 4. BATASAN AIR & PULAU
     if (nearWater(z.x, z.z, 2.2)) {
       if (!nearWater(prevX, prevZ, 2.2)) {
-        // Jangan masuk ke tepi air: kembali ke posisi sebelumnya lalu berbalik arah
         z.x = prevX;
         z.z = prevZ;
         const backAngle = Math.atan2(-z.moveDirX, -z.moveDirZ) + (Math.random() - 0.5) * 1.2;
         z.moveDirX = Math.sin(backAngle);
         z.moveDirZ = Math.cos(backAngle);
       } else {
-        // Sudah terlanjur di tepi air: cari daratan terdekat paling sering 1x per detik
-        // (findNearestLand sangat mahal, dulu dipanggil setiap frame)
         z.landCheckTimer = (z.landCheckTimer || 0) - dt;
         if (!z.safeLand || z.landCheckTimer <= 0) {
           z.safeLand = findNearestLand(z.x, z.z);
@@ -564,56 +736,54 @@ export function updateZombies(dt, isPlaying = true) {
       clampToMaze(z);
     }
 
-    // Resolusi Tabrakan Mendatar Zombie dengan Tangga & Rintangan
+    // Resolusi Tabrakan Mendatar dengan Rintangan & Tangga
     resolveColliders(z, z.y, 0.65);
 
     // Ketinggian Kaki Zombie Sesuai Pijakan
     const zSupp = getSupport(z.x, z.z, z.y);
     z.y = zSupp.h;
 
-    // Interpolasi Sudut Terpendek
+    // Interpolasi Sudut Hadap Terpendek
     z.rotY = lerpAngle(z.rotY, z.targetRotY, dt * 10);
 
-    // Menggelitik Pemain Bila Tersentuh
-    if (distToPlayer < 1.38 && playerState.tickleStunTimer <= 0 && !playerRescue.active) {
-      playSound('tickle');
-      playerState.tickleStunTimer = 1.0;
-      screenState.shakeTime = 0.45;
-      const pushAngle = Math.atan2(playerState.x - z.x, playerState.z - z.z);
-      playerState.knockbackVx = Math.sin(pushAngle) * 9.5;
-      playerState.knockbackVz = Math.cos(pushAngle) * 9.5;
-      z.fleeTimer = 1.4;
-      const fleeAngle = pushAngle + Math.PI;
-      z.moveDirX = Math.sin(fleeAngle);
-      z.moveDirZ = Math.cos(fleeAngle);
-      z.targetRotY = Math.atan2(z.moveDirX, z.moveDirZ);
-      showToast('Hihihi! Geli! Zombie menggelitikmu! 😆');
+    // 5. ANIMASI BADAN, KAKI & TANGAN
+    let tiredYOffset = 0;
+    // Lengan kanan miring hanya saat melambai
+    if (z.state !== 'WANDER' || z.pauseTimer <= 0 || z.actionType !== 'wave') {
+      z.model.rightArm.rotation.z = 0;
     }
-
-    // Animasi Berjalan Lucu
-    if (isMoving) {
+    if (z.state === 'TIRED') {
+      z.walkPhase += dt * 8.0;
+      tiredYOffset = Math.abs(Math.sin(z.walkPhase)) * 0.16; // badan naik-turun terengah-engah
+      z.model.leftLeg.rotation.x = 0;
+      z.model.rightLeg.rotation.x = 0;
+      z.model.root.rotation.z = Math.sin(z.walkPhase * 0.5) * 0.05;
+    } else if (isMoving) {
       z.walkPhase += dt * (currentMoveSpeed * 2.6 + 2.0);
       z.model.root.rotation.z = Math.sin(z.walkPhase) * 0.08;
       z.model.leftLeg.rotation.x = Math.sin(z.walkPhase) * 0.55;
       z.model.rightLeg.rotation.x = -Math.sin(z.walkPhase) * 0.55;
+      z.model.leftArm.rotation.x = -Math.PI * 0.92 + Math.sin(z.walkPhase) * 0.06;
+      z.model.rightArm.rotation.x = -Math.PI * 0.92 - Math.sin(z.walkPhase) * 0.06;
     } else {
       z.walkPhase += dt * 3.0;
-      z.model.root.rotation.z = Math.sin(z.walkPhase) * 0.03;
-      z.model.leftLeg.rotation.x = 0;
-      z.model.rightLeg.rotation.x = 0;
+      if (z.actionType === 'none') {
+        z.model.root.rotation.z = Math.sin(z.walkPhase) * 0.03;
+        z.model.leftLeg.rotation.x = 0;
+        z.model.rightLeg.rotation.x = 0;
+        z.model.leftArm.rotation.x = -Math.PI * 0.92;
+        z.model.rightArm.rotation.x = -Math.PI * 0.92;
+      }
     }
 
-    z.model.leftArm.rotation.x = -Math.PI * 0.92 + Math.sin(z.walkPhase) * 0.06;
-    z.model.rightArm.rotation.x = -Math.PI * 0.92 - Math.sin(z.walkPhase) * 0.06;
-
-    z.model.root.position.set(z.x, z.y, z.z);
+    z.model.root.position.set(z.x, z.y + tiredYOffset, z.z);
     z.model.root.rotation.y = z.rotY;
 
     // Papan Huruf Billboard SELALU Menghadap Kamera
     alignBillboardToCamera(z.boardMesh);
 
     // Lingkaran Kuning Berkedip Bila Membawa Huruf Benar & Bantuan Aktif
-    if (roundState.hintActive && z.letter === neededLetter) {
+    if (roundState.hintActive && isCorrectLetter) {
       z.model.hintRing.visible = true;
       const s = 1 + Math.sin(totalTimeRef.t * 7) * 0.15;
       z.model.hintRing.scale.set(s, s, 1);

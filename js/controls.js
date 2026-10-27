@@ -25,58 +25,114 @@ export function triggerJump() {
 export function isTouchOnUIButton(target) {
   if (!target || !target.closest) return false;
   return Boolean(
-    target.closest('#joystick-zone') ||
     target.closest('.action-buttons') ||
     target.closest('.hud-right-btns') ||
     target.closest('.hud-left-col') ||
     target.closest('.mission-pill') ||
-    target.closest('#cam-menu-popup')
+    target.closest('#cam-menu-popup') ||
+    target.closest('#modal-confirm-exit') ||
+    target.closest('#rotate-device-overlay')
   );
 }
 
 export function enableTouchUI() {
-  const joystickZone = document.getElementById('joystick-zone');
-  if (joystickZone) joystickZone.style.display = 'flex';
+  document.body.classList.add('touch-device');
   const hint = document.getElementById('desktop-hint');
   if (hint) hint.style.display = 'none';
 }
 
-export function updateJoystickFromTouch(touch) {
+export function toggleFullscreen() {
+  try {
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      const el = document.documentElement;
+      if (el.requestFullscreen) {
+        el.requestFullscreen().catch(() => {});
+      } else if (el.webkitRequestFullscreen) {
+        el.webkitRequestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      }
+    }
+  } catch (e) {}
+}
+
+export function tryFullscreenAndLockLandscape() {
+  const isTouch = ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+  if (!isTouch) return;
+  try {
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      const el = document.documentElement;
+      if (el.requestFullscreen) {
+        el.requestFullscreen().catch(() => {});
+      } else if (el.webkitRequestFullscreen) {
+        el.webkitRequestFullscreen();
+      }
+    }
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock('landscape').catch(() => {});
+    }
+  } catch (e) {}
+}
+
+// Handler Joystick Mengambang Dinamis
+export function handleFloatingJoyStart(touch) {
+  touchState.joyTouchId = touch.identifier;
+  touchState.joyOriginX = touch.clientX;
+  touchState.joyOriginY = touch.clientY;
+
   const joystickZone = document.getElementById('joystick-zone');
   const joystickKnob = document.getElementById('joystick-knob');
-  if (!joystickZone || !joystickKnob) return;
-  const rect = joystickZone.getBoundingClientRect();
-  const cx = rect.left + rect.width / 2;
-  const cy = rect.top + rect.height / 2;
-  const maxR = rect.width * 0.36;
-  let dx = touch.clientX - cx;
-  let dy = touch.clientY - cy;
+  if (joystickZone && joystickKnob) {
+    joystickZone.style.left = `${touch.clientX}px`;
+    joystickZone.style.top = `${touch.clientY}px`;
+    joystickZone.style.display = 'flex';
+    joystickKnob.style.transform = 'translate(0px, 0px)';
+  }
+  joyVector.x = 0;
+  joyVector.y = 0;
+}
+
+export function handleFloatingJoyMove(touch) {
+  const joystickKnob = document.getElementById('joystick-knob');
+  if (!joystickKnob) return;
+
+  const maxR = 46; // radius gerak knob di dalam zona 120px
+  let dx = touch.clientX - touchState.joyOriginX;
+  let dy = touch.clientY - touchState.joyOriginY;
   const dist = Math.hypot(dx, dy);
+
   if (dist > maxR) {
     dx = (dx / dist) * maxR;
     dy = (dy / dist) * maxR;
   }
+
   joystickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
   joyVector.x = dx / maxR;
   joyVector.y = dy / maxR;
 }
 
-export function resetJoystick(e) {
-  const joystickKnob = document.getElementById('joystick-knob');
-  for (let i = 0; i < e.changedTouches.length; i++) {
-    if (e.changedTouches[i].identifier === touchState.joyTouchId) {
-      touchState.joyTouchId = null;
-      joyVector.x = 0;
-      joyVector.y = 0;
-      if (joystickKnob) joystickKnob.style.transform = 'translate(0px, 0px)';
-      break;
-    }
+export function handleFloatingJoyEnd(identifier) {
+  if (touchState.joyTouchId === identifier) {
+    touchState.joyTouchId = null;
+    joyVector.x = 0;
+    joyVector.y = 0;
+
+    const joystickZone = document.getElementById('joystick-zone');
+    const joystickKnob = document.getElementById('joystick-knob');
+    if (joystickZone) joystickZone.style.display = 'none';
+    if (joystickKnob) joystickKnob.style.transform = 'translate(0px, 0px)';
   }
 }
 
 export function endCamTouches(e) {
   for (let i = 0; i < e.changedTouches.length; i++) {
-    touchState.camTouches.delete(e.changedTouches[i].identifier);
+    const t = e.changedTouches[i];
+    touchState.camTouches.delete(t.identifier);
+    handleFloatingJoyEnd(t.identifier);
   }
   if (touchState.camTouches.size < 2) {
     touchState.prevPinchDist = null;
@@ -144,30 +200,55 @@ export function initControls() {
     camControl.idleTimer = 0;
   }, { passive: true });
 
-  // Touch Drag & Pinch Kamera di Separuh Layar Kanan (Hanya di Mode Kamera Bahu)
+  // Cegah menu tekan lama (contextmenu) di seluruh layar game
+  window.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+  });
+
+  // Touch Management Terpadu (Floating Joystick di Kiri, Kamera di Kanan)
   window.addEventListener('touchstart', (e) => {
-    if (gameStateRef.current !== 'PLAYING' || cameraState.mode !== 'shoulder') return;
+    enableTouchUI();
+    if (gameStateRef.current !== 'PLAYING') return;
+
     for (let i = 0; i < e.changedTouches.length; i++) {
       const t = e.changedTouches[i];
-      if (t.identifier === touchState.joyTouchId) continue;
       if (isTouchOnUIButton(t.target)) continue;
-      if (t.clientX >= window.innerWidth * 0.5 || touchState.camTouches.size > 0) {
-        touchState.camTouches.set(t.identifier, { x: t.clientX, y: t.clientY });
-        camControl.idleTimer = 0;
+
+      // Separuh layar kiri: Joystick Mengambang
+      if (t.clientX < window.innerWidth * 0.5) {
+        if (touchState.joyTouchId === null) {
+          handleFloatingJoyStart(t);
+        }
+      } else {
+        // Separuh layar kanan: Putar Kamera Bahu
+        if (cameraState.mode === 'shoulder') {
+          touchState.camTouches.set(t.identifier, { x: t.clientX, y: t.clientY });
+          camControl.idleTimer = 0;
+        }
       }
     }
-    if (touchState.camTouches.size === 2) {
+
+    if (cameraState.mode === 'shoulder' && touchState.camTouches.size === 2) {
       const pts = Array.from(touchState.camTouches.values());
       touchState.prevPinchDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
     }
   }, { passive: true });
 
   window.addEventListener('touchmove', (e) => {
-    if (gameStateRef.current !== 'PLAYING' || touchState.camTouches.size === 0 || cameraState.mode !== 'shoulder') return;
-    let updated = false;
+    if (gameStateRef.current !== 'PLAYING') return;
+
+    let updatedCam = false;
     for (let i = 0; i < e.changedTouches.length; i++) {
       const t = e.changedTouches[i];
-      if (touchState.camTouches.has(t.identifier)) {
+
+      // Gerak Joystick Mengambang
+      if (t.identifier === touchState.joyTouchId) {
+        handleFloatingJoyMove(t);
+        continue;
+      }
+
+      // Gerak Kamera Bahu
+      if (cameraState.mode === 'shoulder' && touchState.camTouches.has(t.identifier)) {
         const prev = touchState.camTouches.get(t.identifier);
         if (touchState.camTouches.size === 1) {
           const dx = t.clientX - prev.x;
@@ -182,10 +263,11 @@ export function initControls() {
         }
         prev.x = t.clientX;
         prev.y = t.clientY;
-        updated = true;
+        updatedCam = true;
       }
     }
-    if (updated && touchState.camTouches.size === 2) {
+
+    if (updatedCam && touchState.camTouches.size === 2) {
       const pts = Array.from(touchState.camTouches.values());
       const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
       if (touchState.prevPinchDist !== null) {
@@ -204,41 +286,19 @@ export function initControls() {
   window.addEventListener('touchend', endCamTouches, { passive: true });
   window.addEventListener('touchcancel', endCamTouches, { passive: true });
 
-  // Joystick Virtual
-  const joystickZone = document.getElementById('joystick-zone');
+  // Deteksi Perangkat Sentuh
   if ('ontouchstart' in window || navigator.maxTouchPoints > 0 || window.innerWidth <= 900) {
     enableTouchUI();
   }
-  window.addEventListener('touchstart', () => enableTouchUI(), { once: true, passive: true });
 
-  if (joystickZone) {
-    joystickZone.addEventListener('touchstart', (e) => {
-      e.preventDefault();
+  // Tombol Layar Penuh (Fullscreen) di HUD Kanan Atas
+  const btnFullscreen = document.getElementById('btn-hud-fullscreen');
+  if (btnFullscreen) {
+    btnFullscreen.addEventListener('click', (e) => {
       e.stopPropagation();
-      for (let i = 0; i < e.changedTouches.length; i++) {
-        const t = e.changedTouches[i];
-        if (touchState.joyTouchId === null) {
-          touchState.joyTouchId = t.identifier;
-          updateJoystickFromTouch(t);
-          break;
-        }
-      }
-    }, { passive: false });
-
-    joystickZone.addEventListener('touchmove', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      for (let i = 0; i < e.changedTouches.length; i++) {
-        const t = e.changedTouches[i];
-        if (t.identifier === touchState.joyTouchId) {
-          updateJoystickFromTouch(t);
-          break;
-        }
-      }
-    }, { passive: false });
-
-    joystickZone.addEventListener('touchend', resetJoystick, { passive: false });
-    joystickZone.addEventListener('touchcancel', resetJoystick, { passive: false });
+      playSound('click');
+      toggleFullscreen();
+    });
   }
 
   // Tombol Aksi Tembak dan Lompat

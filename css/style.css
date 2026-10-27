@@ -30,12 +30,17 @@
 
     html, body {
       width: 100%;
-      height: 100%;
+      height: 100vh;
+      height: 100dvh;
       overflow: hidden;
       background-color: var(--bg-dalam);
       font-family: 'Plus Jakarta Sans', sans-serif;
       color: var(--teks);
       touch-action: none;
+      overscroll-behavior: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
     }
 
     /* Kanvas 3D Utama */
@@ -370,19 +375,35 @@
 
     .mode-pill {
       border-radius: 999px;
-      padding: 12px 24px;
-      min-height: 64px;
+      padding: 10px 22px;
+      min-height: 60px;
       font-family: 'Fredoka', sans-serif;
       font-weight: 700;
-      font-size: 20px;
       color: var(--teks-gelap);
       cursor: pointer;
       border: 3px solid transparent;
       opacity: 0.68;
       transition: transform 0.22s cubic-bezier(.2, .9, .3, 1.2), opacity 0.22s ease, box-shadow 0.22s ease;
       display: inline-flex;
+      flex-direction: column;
       align-items: center;
-      gap: 8px;
+      justify-content: center;
+      gap: 2px;
+      text-align: center;
+    }
+
+    .mode-pill-name {
+      font-size: 1.25rem;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    .mode-pill-desc {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: 0.78rem;
+      font-weight: 600;
+      opacity: 0.9;
+      line-height: 1.1;
     }
 
     .mode-pill.santai { background: var(--hijau); }
@@ -391,7 +412,7 @@
 
     .mode-pill.selected {
       opacity: 1;
-      transform: scale(1.07);
+      transform: scale(1.06);
       border-color: #FFFFFF;
       box-shadow: 0 0 24px rgba(255, 255, 255, 0.55), 0 8px 20px rgba(0,0,0,0.35);
     }
@@ -452,9 +473,9 @@
     /* Baris Atas HUD */
     .hud-top {
       position: absolute;
-      top: 14px;
-      left: 14px;
-      right: 14px;
+      top: max(12px, env(safe-area-inset-top, 12px));
+      left: max(14px, env(safe-area-inset-left, 14px));
+      right: max(14px, env(safe-area-inset-right, 14px));
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
@@ -640,6 +661,13 @@
     .round-glass-btn:hover {
       transform: scale(1.07);
       background: rgba(255,255,255,0.22);
+    }
+
+    .touch-only-btn {
+      display: none;
+    }
+    body.touch-device .touch-only-btn {
+      display: flex;
     }
 
     .round-glass-btn:active {
@@ -914,13 +942,11 @@
       z-index: 9;
     }
 
-    /* Joystick Virtual Kiri Bawah */
+    /* Joystick Virtual Mengambang Kiri Bawah */
     #joystick-zone {
-      position: absolute;
-      bottom: 26px;
-      left: 26px;
-      width: 140px;
-      height: 140px;
+      position: fixed;
+      width: 120px;
+      height: 120px;
       border-radius: 50%;
       background: var(--kaca-hud);
       border: 2px solid var(--kaca-garis);
@@ -930,11 +956,13 @@
       align-items: center;
       justify-content: center;
       touch-action: none;
+      z-index: 15;
+      transform: translate(-50%, -50%);
     }
 
     #joystick-knob {
-      width: 60px;
-      height: 60px;
+      width: 52px;
+      height: 52px;
       border-radius: 50%;
       background: linear-gradient(180deg, var(--limau), var(--hijau));
       border: 3px solid #FFFFFF;
@@ -943,23 +971,27 @@
       transform: translate(0px, 0px);
     }
 
-    /* Tombol Tembak & Lompat Kanan Bawah */
+    /* Tombol Tembak & Lompat Kanan Bawah Melengkung (Ergonomis HP) */
     .action-buttons {
-      position: absolute;
-      bottom: 26px;
-      right: 26px;
-      display: flex;
-      align-items: flex-end;
-      gap: 16px;
-      pointer-events: auto;
+      position: fixed;
+      bottom: max(20px, env(safe-area-inset-bottom, 20px));
+      right: max(20px, env(safe-area-inset-right, 20px));
+      display: block;
+      width: 175px;
+      height: 140px;
+      pointer-events: none;
+      z-index: 15;
     }
 
-    #btn-jump {
-      width: 78px;
-      height: 78px;
+    #btn-shoot {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: 88px;
+      height: 88px;
       border-radius: 50%;
-      background: var(--kaca-hud);
-      border: 2px solid var(--kaca-garis);
+      background: linear-gradient(135deg, var(--pink) 0%, var(--oranye) 100%);
+      border: 4px solid #FFFFFF;
       color: var(--teks);
       font-family: 'Fredoka', sans-serif;
       font-weight: 700;
@@ -969,39 +1001,60 @@
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+      box-shadow: 0 6px 0 #9D174D, 0 10px 25px rgba(244, 114, 182, 0.45);
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
       touch-action: none;
+      pointer-events: auto;
     }
 
-    #btn-jump:active {
-      transform: scale(0.92);
-      background: rgba(255,255,255,0.28);
-    }
-
-    #btn-shoot {
-      position: relative;
-      width: 104px;
-      height: 104px;
+    /* Area sentuh (hitbox virtual) lebih besar dari visual agar mudah ditekan anak */
+    #btn-shoot::before {
+      content: '';
+      position: absolute;
+      inset: -14px;
       border-radius: 50%;
-      background: linear-gradient(135deg, var(--pink) 0%, var(--oranye) 100%);
-      border: 4px solid #FFFFFF;
+      pointer-events: auto;
+    }
+
+    #btn-shoot .tool-emoji {
+      font-size: 2.1rem;
+      line-height: 1;
+    }
+
+    #btn-jump {
+      position: absolute;
+      top: 0;
+      left: 10px;
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: var(--kaca-hud);
+      border: 2px solid var(--kaca-garis);
       color: var(--teks);
       font-family: 'Fredoka', sans-serif;
       font-weight: 700;
-      font-size: 1.05rem;
+      font-size: 0.88rem;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      box-shadow: 0 8px 0 #9D174D, 0 12px 30px rgba(244, 114, 182, 0.5);
-      transition: transform 0.12s ease, box-shadow 0.12s ease;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.35);
       touch-action: none;
+      pointer-events: auto;
     }
 
-    #btn-shoot .tool-emoji {
-      font-size: 2.3rem;
-      line-height: 1.05;
+    #btn-jump::before {
+      content: '';
+      position: absolute;
+      inset: -12px;
+      border-radius: 50%;
+      pointer-events: auto;
+    }
+
+    #btn-jump:active {
+      transform: scale(0.92);
+      background: rgba(255,255,255,0.28);
     }
 
     #btn-shoot.in-range {
@@ -1400,6 +1453,350 @@
     }
     .completed-target-card .target-emoji {
       font-size: 1.25rem;
+    }
+
+    /* ==================== 9. OVERLAY AJAKAN PUTAR HP ==================== */
+    .rotate-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(18, 16, 43, 0.95);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      z-index: 3000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+    }
+
+    .rotate-overlay.show {
+      display: flex;
+      animation: fadeIn 0.25s ease-out;
+    }
+
+    .rotate-panel {
+      max-width: 440px;
+      width: 100%;
+      padding: 34px 24px;
+      border-radius: 28px;
+      text-align: center;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.55);
+      animation: popIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .rotate-phone-anim {
+      font-size: 4.8rem;
+      display: inline-block;
+      margin-bottom: 16px;
+      animation: phoneRotate90 2.2s ease-in-out infinite;
+      transform-origin: center;
+    }
+
+    @keyframes phoneRotate90 {
+      0%, 15% { transform: rotate(0deg) scale(1); }
+      50%, 75% { transform: rotate(-90deg) scale(1.08); }
+      90%, 100% { transform: rotate(0deg) scale(1); }
+    }
+
+    .rotate-title {
+      font-family: 'Fredoka', sans-serif;
+      font-weight: 700;
+      font-size: 1.8rem;
+      color: var(--limau);
+      margin-bottom: 8px;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    }
+
+    .rotate-subtitle {
+      font-size: 0.95rem;
+      color: var(--teks-redup);
+      line-height: 1.45;
+    }
+
+    /* ==================== VERSI HP HORIZONTAL (LANDSCAPE) ==================== */
+    @media (max-height: 500px) {
+      .screen {
+        padding: max(6px, env(safe-area-inset-top, 6px)) max(14px, env(safe-area-inset-right, 14px)) max(6px, env(safe-area-inset-bottom, 6px)) max(14px, env(safe-area-inset-left, 14px));
+      }
+
+      .glass-panel {
+        max-height: 94dvh;
+        overflow-y: auto;
+        padding: 10px 16px;
+        border-radius: 18px;
+        scrollbar-width: thin;
+      }
+
+      .game-title {
+        font-size: clamp(1.8rem, 5vw, 2.4rem);
+        margin-bottom: 2px;
+      }
+
+      .screen-title {
+        font-size: clamp(1.2rem, 3.5vw, 1.5rem);
+        margin-bottom: 2px;
+      }
+
+      .subtitle {
+        font-size: 0.88rem;
+        margin-bottom: 8px;
+      }
+
+      /* Kartu Pilihan Berjajar Mendatar & Ramping */
+      .cards-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin: 4px 0;
+      }
+
+      .choice-card {
+        padding: 8px 10px;
+        border-radius: 14px;
+        flex-direction: column;
+        justify-content: center;
+      }
+
+      .char-preview-canvas {
+        width: 70px;
+        height: 70px;
+        border-radius: 12px;
+      }
+
+      .card-icon-box {
+        width: 54px;
+        height: 54px;
+        font-size: 1.7rem;
+        border-radius: 14px;
+      }
+
+      .card-title {
+        font-size: 1rem;
+        margin-top: 4px;
+      }
+
+      .card-desc {
+        font-size: 0.75rem;
+        margin-top: 2px;
+      }
+
+      /* Bagian Target Stepper & Chip Cepat Ringkas */
+      .target-count-section {
+        padding: 6px 12px;
+        margin-top: 6px;
+      }
+      .target-count-section .subtitle {
+        margin-top: 2px;
+        margin-bottom: 4px;
+      }
+      .target-stepper-container {
+        gap: 12px;
+        margin: 2px 0;
+      }
+      .stepper-btn {
+        width: 38px;
+        height: 38px;
+        font-size: 1.4rem;
+      }
+      .stepper-number {
+        font-size: 1.8rem;
+      }
+      .quick-target-chips {
+        gap: 6px;
+        margin: 4px 0;
+      }
+      .target-chip {
+        font-size: 0.85rem;
+        padding: 3px 10px;
+      }
+      .playtime-estimate {
+        font-size: 0.82rem;
+        margin-top: 3px;
+      }
+
+      /* Mode Pills di HP Horizontal */
+      .mode-pills {
+        gap: 8px;
+        margin-top: 4px;
+      }
+      .mode-pill {
+        padding: 6px 14px;
+        min-height: 44px;
+      }
+      .mode-pill-name {
+        font-size: 1rem;
+      }
+      .mode-pill-desc {
+        font-size: 0.72rem;
+      }
+
+      /* Tombol Aksi Menu: Selalu terlihat di bawah */
+      .btn {
+        min-height: 46px;
+        padding: 6px 18px;
+        font-size: 1rem;
+        border-radius: 14px;
+      }
+      .btn-row {
+        position: sticky;
+        bottom: 0;
+        background: rgba(20, 16, 45, 0.85);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        padding: 6px 8px;
+        border-radius: 14px;
+        gap: 8px;
+        margin-top: 6px;
+        z-index: 5;
+      }
+
+      /* ==================== HUD SAAT BERMAIN HP HORIZONTAL ==================== */
+      .hud-top {
+        position: static;
+      }
+
+      /* Kolom Kiri: Mini Map 96px di pojok kiri atas dan Bintang di kanannya */
+      .hud-left-col {
+        position: fixed;
+        top: max(6px, env(safe-area-inset-top, 6px));
+        left: max(10px, env(safe-area-inset-left, 10px));
+        flex-direction: row;
+        align-items: center;
+        gap: 6px;
+        z-index: 12;
+      }
+
+      .glass-minimap {
+        width: 96px;
+        height: 96px;
+        order: 1;
+        flex-shrink: 0;
+      }
+
+      .star-pill {
+        order: 2;
+        height: 38px;
+        padding: 2px 10px;
+        font-size: 1.1rem;
+        gap: 4px;
+        flex-shrink: 0;
+      }
+
+      /* Panel Misi Ramping di Tengah Atas */
+      .mission-pill {
+        position: fixed;
+        top: max(6px, env(safe-area-inset-top, 6px));
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 4px 10px;
+        gap: 6px;
+        max-width: min(42vw, 290px);
+        z-index: 12;
+      }
+
+      .mission-emoji {
+        font-size: 1.5rem;
+      }
+
+      .letter-tile {
+        width: 38px;
+        height: 38px;
+        font-size: 1.3rem;
+      }
+
+      .round-progress-wrapper {
+        min-width: 75px;
+        gap: 2px;
+      }
+
+      .round-progress-text {
+        font-size: 0.75rem;
+      }
+
+      .mission-progress-track {
+        height: 5px;
+      }
+
+      /* Tombol Kamera, Musik, Layar Penuh & Rumah: 44px Berjajar di Kanan Atas */
+      .hud-right-btns {
+        position: fixed;
+        top: max(6px, env(safe-area-inset-top, 6px));
+        right: max(10px, env(safe-area-inset-right, 10px));
+        display: flex;
+        flex-direction: row;
+        gap: 6px;
+        z-index: 12;
+      }
+
+      .round-glass-btn {
+        width: 44px;
+        height: 44px;
+        font-size: 1.15rem;
+      }
+
+      #btn-repeat-voice {
+        width: 36px !important;
+        height: 36px !important;
+        font-size: 1rem !important;
+      }
+
+      /* Tombol Aksi Kanan Bawah Melengkung */
+      .action-buttons {
+        bottom: max(12px, env(safe-area-inset-bottom, 12px));
+        right: max(12px, env(safe-area-inset-right, 12px));
+        width: 160px;
+        height: 125px;
+        z-index: 15;
+      }
+
+      #btn-shoot {
+        width: 84px;
+        height: 84px;
+        font-size: 0.95rem;
+      }
+
+      #btn-shoot .tool-emoji {
+        font-size: 1.9rem;
+      }
+
+      #btn-jump {
+        width: 60px;
+        height: 60px;
+        font-size: 0.85rem;
+        left: 6px;
+      }
+
+      /* Toast & Selebrasi */
+      #toast-msg {
+        top: 68px;
+        font-size: 1rem;
+        padding: 6px 16px;
+      }
+
+      #center-celebration {
+        padding: 16px 28px;
+        border-radius: 24px;
+      }
+      #center-celebration .big-emoji {
+        font-size: 3.8rem;
+      }
+      #center-celebration .big-word {
+        font-size: 2.1rem;
+      }
+
+      /* Album Grid di HP Horizontal */
+      .album-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin: 8px 0;
+      }
+      .album-card {
+        padding: 10px;
+        border-radius: 14px;
+      }
+      .album-emoji {
+        font-size: 2.2rem;
+      }
     }
 
     /* Hormati prefers-reduced-motion */

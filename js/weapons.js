@@ -164,6 +164,9 @@ import {
       const roundId = roundState.roundId;
       const worldPos = zombie.model.root.position.clone();
 
+      // Getar singkat di perangkat yang mendukung (Android)
+      try { if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(40); } catch (e) {}
+
       // Efek Puff + Ubah Jadi Hewan Lucu
       playSound('puff');
       spawnPuffParticles(worldPos.x, 1.3, worldPos.z, 20);
@@ -214,6 +217,9 @@ import {
         }, delayMs);
       } else {
         // TARGET SELESAI!
+        // Getar pola gembira [40, 60, 40] saat target selesai
+        try { if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate([40, 60, 40]); } catch (e) {}
+
         setTimeout(() => {
           playSound('winTarget');
           spawnConfettiBurst();
@@ -281,9 +287,10 @@ import {
       const neededChar = getNeededLetter();
       const neededSpoken = getLetterSpokenName(neededChar);
 
-      // Zombie tertawa dan lari menjauh sebentar (wajah menghadap arah larinya)
-      zombie.fleeTimer = 2.2;
-      zombie.pauseTimer = 0;
+      // Zombie kaget dan lari menjauh (masuk state FLEE)
+      zombie.state = 'FLEE';
+      zombie.fleeTimer = 2.5;
+      zombie.fleeCooldown = 0;
       const awayX = zombie.x - playerState.x;
       const awayZ = zombie.z - playerState.z;
       const awayLen = Math.hypot(awayX, awayZ) || 1;

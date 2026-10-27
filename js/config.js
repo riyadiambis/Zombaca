@@ -53,11 +53,47 @@ export const LEVEL_DATA = {
   ]
 };
 
-// Jumlah zombie untuk peta luas: Santai 8, Sedang 12, Seru 16
+// Kecepatan gerak standar pemain (dianggap 1.0)
+export const PLAYER_SPEED = 9.2;
+
+// Tingkat Kelincahan Zombi
+// Santai: jarak waspada 5 unit, kecepatan kabur 0.5x, kabur 2s, capek 4s
+// Sedang: jarak waspada 8 unit, kecepatan kabur 0.75x, kabur 3s, capek 3s
+// Seru:   jarak waspada 12 unit, kecepatan kabur 0.9x (zig-zag), kabur 4s, capek 2s
 export const MODE_CONFIG = {
-  santai: { count: 8,  chaseDist: 0,  speed: 2.3, respawnDelay: 2.2 },
-  sedang: { count: 12, chaseDist: 10, speed: 4.1, respawnDelay: 1.5 },
-  seru:   { count: 16, chaseDist: 20, speed: 5.5, respawnDelay: 0.9 }
+  santai: {
+    name: "Santai",
+    desc: "Zombi santai, gampang ditangkap",
+    count: 8,
+    alertDist: 5.0,
+    fleeRatio: 0.5,
+    fleeDuration: 2.0,
+    tiredDuration: 4.0,
+    zigzag: false,
+    respawnDelay: 2.2
+  },
+  sedang: {
+    name: "Sedang",
+    desc: "Zombi suka kabur",
+    count: 12,
+    alertDist: 8.0,
+    fleeRatio: 0.75,
+    fleeDuration: 3.0,
+    tiredDuration: 3.0,
+    zigzag: false,
+    respawnDelay: 1.5
+  },
+  seru: {
+    name: "Seru",
+    desc: "Zombi lincah dan zig-zag",
+    count: 16,
+    alertDist: 12.0,
+    fleeRatio: 0.9,
+    fleeDuration: 4.0,
+    tiredDuration: 2.0,
+    zigzag: true,
+    respawnDelay: 0.9
+  }
 };
 
 export const TOOL_CONFIG = {

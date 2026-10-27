@@ -3,7 +3,7 @@
  *************************************************************************/
 import {
   STEP_H, WATER_Y, GRAVITY, BOUNCE_VY,
-  CAM_MIN_DIST, CAM_MAX_DIST
+  CAM_MIN_DIST, CAM_MAX_DIST, PLAYER_SPEED
 } from './config.js';
 import {
   saveState, roundState, playerState, selectionState,
@@ -359,16 +359,9 @@ function tick() {
     }
   } else {
     // Pergerakan Standar Pemain
-    if (playerState.tickleStunTimer > 0) {
-      playerState.tickleStunTimer -= dt;
-      playerState.x += playerState.knockbackVx * dt;
-      playerState.z += playerState.knockbackVz * dt;
-      playerState.knockbackVx *= 0.9;
-      playerState.knockbackVz *= 0.9;
-    } else if (moveLen > 0.08) {
-      const speed = 9.2;
-      playerState.x += worldMoveX * speed * dt;
-      playerState.z += worldMoveZ * speed * dt;
+    if (moveLen > 0.08) {
+      playerState.x += worldMoveX * PLAYER_SPEED * dt;
+      playerState.z += worldMoveZ * PLAYER_SPEED * dt;
 
       const desiredPlayerRotY = Math.atan2(worldMoveX, worldMoveZ);
       playerState.rotY = lerpAngle(playerState.rotY, desiredPlayerRotY, dt * 12);
@@ -451,7 +444,7 @@ function tick() {
       sceneRefs.playerObj.leftLeg.rotation.x = -0.45;
       sceneRefs.playerObj.rightLeg.rotation.x = 0.45;
       sceneRefs.playerObj.leftArm.rotation.x = -0.7;
-    } else if (moveLen > 0.08 && playerState.tickleStunTimer <= 0) {
+    } else if (moveLen > 0.08) {
       const swing = Math.sin(playerState.walkTime) * 0.65;
       sceneRefs.playerObj.leftLeg.rotation.x = swing;
       sceneRefs.playerObj.rightLeg.rotation.x = -swing;

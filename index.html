@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Zombaca: Zombi Lucu, Ayo Membaca!</title>
 
   <!-- Google Fonts: Fredoka (600, 700) & Plus Jakarta Sans (500, 700, 800) -->
@@ -165,11 +165,20 @@
         </div>
       </div>
 
-      <p class="subtitle" style="margin-top: 14px; margin-bottom: 6px;">Mode Zombie (Peta Luas):</p>
+      <p class="subtitle" style="margin-top: 14px; margin-bottom: 6px;">Tingkat Kelincahan Zombi:</p>
       <div class="mode-pills" id="mode-pills">
-        <button class="mode-pill santai selected" data-mode="santai">🌿 Santai (8 Zombie)</button>
-        <button class="mode-pill sedang" data-mode="sedang">🏃 Sedang (12 Zombie)</button>
-        <button class="mode-pill seru" data-mode="seru">⚡ Seru (16 Zombie)</button>
+        <button class="mode-pill santai selected" data-mode="santai">
+          <span class="mode-pill-name">🌿 Santai</span>
+          <span class="mode-pill-desc">Zombi santai, gampang ditangkap</span>
+        </button>
+        <button class="mode-pill sedang" data-mode="sedang">
+          <span class="mode-pill-name">🏃 Sedang</span>
+          <span class="mode-pill-desc">Zombi suka kabur</span>
+        </button>
+        <button class="mode-pill seru" data-mode="seru">
+          <span class="mode-pill-name">⚡ Seru</span>
+          <span class="mode-pill-desc">Zombi lincah dan zig-zag</span>
+        </button>
       </div>
 
       <!-- Pilihan Jumlah Target 3 - 20 -->
@@ -235,6 +244,7 @@
 
       <!-- Tombol Kamera, Musik & Rumah Kanan Atas -->
       <div class="hud-right-btns">
+        <button id="btn-hud-fullscreen" class="round-glass-btn touch-only-btn" title="Layar Penuh">⛶</button>
         <button id="btn-hud-cam" class="round-glass-btn" title="Pilihan Kamera">🎥</button>
         <button id="btn-hud-music" class="round-glass-btn" title="Musik">🔈</button>
         <button id="btn-hud-home" class="round-glass-btn" title="Ke Menu Utama">🏠</button>
@@ -383,6 +393,14 @@
     </div>
   </div>
 
+  <!-- 9. OVERLAY AJAKAN PUTAR HP (KHUSUS PORTRAIT PERANGKAT SENTUH) -->
+  <div id="rotate-device-overlay" class="rotate-overlay">
+    <div class="glass-panel rotate-panel">
+      <div class="rotate-phone-anim">📱</div>
+      <h2 class="rotate-title">Putar HP-mu ke samping ya!</h2>
+      <p class="rotate-subtitle">Zombaca dirancang nyaman dimainkan dalam posisi horizontal (landscape) 🎮</p>
+    </div>
+  </div>
 
   <!-- Main Game Entry Point as ES Module -->
   <script type="module" src="./js/main.js"></script>

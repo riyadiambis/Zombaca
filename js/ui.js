@@ -16,6 +16,7 @@ import {
   getNeededLetter, clearAllZombies, spawnZombie,
   ensureCorrectLetterAmongZombies, reshuffleAllZombieLetters
 } from './zombies.js';
+import { tryFullscreenAndLockLandscape } from './controls.js';
 
 export let minimapCanvas = null;
 export let minimapCtx = null;
@@ -500,6 +501,7 @@ export     const screens = {
     }
 
     export function startNewRound() {
+      tryFullscreenAndLockLandscape();
       gameStateRef.current = 'PLAYING';
       roundState.roundId++;
       showScreen(null);
@@ -601,6 +603,45 @@ export     const screens = {
       showScreen('start');
     }
 
+let hasSpokenRotatePrompt = false;
+let orientationWasPaused = false;
+
+export function checkDeviceOrientation() {
+  const isTouchDevice = ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+  const overlay = document.getElementById('rotate-device-overlay');
+  if (!overlay) return;
+
+  // Di desktop / laptop tidak pernah muncul
+  if (!isTouchDevice) {
+    overlay.classList.remove('show');
+    return;
+  }
+
+  const isPortrait = window.matchMedia && window.matchMedia('(orientation: portrait)').matches;
+
+  if (isPortrait) {
+    overlay.classList.add('show');
+    if (!orientationWasPaused) {
+      orientationWasPaused = true;
+      gameStateRef.isPaused = true;
+    }
+    if (!hasSpokenRotatePrompt) {
+      hasSpokenRotatePrompt = true;
+      speakText('Putar HP-mu ke samping ya!');
+    }
+  } else {
+    overlay.classList.remove('show');
+    hasSpokenRotatePrompt = false;
+    if (orientationWasPaused) {
+      orientationWasPaused = false;
+      const confirmModal = document.getElementById('modal-confirm-exit');
+      if (!confirmModal || !confirmModal.classList.contains('show')) {
+        gameStateRef.isPaused = false;
+      }
+    }
+  }
+}
+
 export function initUI() {
   // Hubungkan elemen layar
   screens.start = document.getElementById('screen-start');
@@ -618,17 +659,31 @@ export function initUI() {
     sceneRefs.minimapCtx = minimapCtx;
   }
 
-      // Menu Flow
-    const btnGoChar = document.getElementById('btn-go-char');
-    if (btnGoChar) {
-      btnGoChar.addEventListener('click', () => {
-        playSound('click');
-        updateHatButtonsUI();
-        refreshPreviewHatsAndTools();
-        showScreen('char');
-        speakText('Pilih temanmu!');
-      });
+  // Pengaturan Orientasi HP Horizontal
+  const portraitMql = window.matchMedia ? window.matchMedia('(orientation: portrait)') : null;
+  if (portraitMql) {
+    if (portraitMql.addEventListener) {
+      portraitMql.addEventListener('change', checkDeviceOrientation);
+    } else if (portraitMql.addListener) {
+      portraitMql.addListener(checkDeviceOrientation);
     }
+  }
+  window.addEventListener('resize', checkDeviceOrientation);
+  window.addEventListener('orientationchange', checkDeviceOrientation);
+  checkDeviceOrientation();
+
+  // Menu Flow
+  const btnGoChar = document.getElementById('btn-go-char');
+  if (btnGoChar) {
+    btnGoChar.addEventListener('click', () => {
+      tryFullscreenAndLockLandscape();
+      playSound('click');
+      updateHatButtonsUI();
+      refreshPreviewHatsAndTools();
+      showScreen('char');
+      speakText('Pilih temanmu!');
+    });
+  }
 
     const btnBackStart = document.getElementById('btn-back-start');
     if (btnBackStart) {
@@ -675,6 +730,7 @@ export function initUI() {
     const btnStartPlay = document.getElementById('btn-start-play');
     if (btnStartPlay) {
       btnStartPlay.addEventListener('click', () => {
+        tryFullscreenAndLockLandscape();
         playSound('click');
         startNewRound();
       });
@@ -683,6 +739,7 @@ export function initUI() {
     const btnEndAgain = document.getElementById('btn-end-again');
     if (btnEndAgain) {
       btnEndAgain.addEventListener('click', () => {
+        tryFullscreenAndLockLandscape();
         playSound('click');
         startNewRound();
       });
@@ -809,13 +866,17 @@ export function initUI() {
       });
     });
 
-    // Pilihan Mode Zombie
+    // Pilihan Mode Kelincahan Zombi
     document.querySelectorAll('#mode-pills .mode-pill').forEach(pill => {
       pill.addEventListener('click', () => {
         playSound('click');
         document.querySelectorAll('#mode-pills .mode-pill').forEach(p => p.classList.remove('selected'));
         pill.classList.add('selected');
         selectionState.mode = pill.dataset.mode;
+        const cfg = MODE_CONFIG[selectionState.mode];
+        if (cfg) {
+          speakText(`Mode ${cfg.name}. ${cfg.desc}`);
+        }
       });
     });
 

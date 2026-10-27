@@ -181,12 +181,70 @@ export const worldRng = mulberry32(20240607);
       return a.hFrom + (a.hTo - a.hFrom) * f;
     }
 
+    // ---------- Spatial grid collider (sel 8 unit) ----------
+    // Collider statis dimasukkan ke setiap sel yang disentuh kotak pembatasnya, sehingga
+    // cek tabrakan hanya melihat collider di sekitar titik, bukan seluruh ~260 collider.
+    // Collider bergerak (rakit) selalu ikut diperiksa.
+    const GRID_CELL = 8;
+    const GRID_MIN = -112;
+    const GRID_N = 28;
+    let gridCells = null;
+    const movingColliders = [];
+    const queryResult = [];
+    let queryStamp = 0;
+
+    function gridIndex(v) {
+      const i = Math.floor((v - GRID_MIN) / GRID_CELL);
+      return i < 0 ? 0 : (i >= GRID_N ? GRID_N - 1 : i);
+    }
+
+    export function buildColliderGrid() {
+      gridCells = new Array(GRID_N * GRID_N);
+      for (let i = 0; i < gridCells.length; i++) gridCells[i] = [];
+      movingColliders.length = 0;
+      for (let k = 0; k < colliders.length; k++) {
+        const c = colliders[k];
+        if (c.raft) { movingColliders.push(c); continue; }
+        const x0 = c.t === 1 ? c.x - c.r : c.x0, x1 = c.t === 1 ? c.x + c.r : c.x1;
+        const z0 = c.t === 1 ? c.z - c.r : c.z0, z1 = c.t === 1 ? c.z + c.r : c.z1;
+        for (let ix = gridIndex(x0); ix <= gridIndex(x1); ix++) {
+          for (let iz = gridIndex(z0); iz <= gridIndex(z1); iz++) {
+            gridCells[iz * GRID_N + ix].push(c);
+          }
+        }
+      }
+    }
+
+    // Collider yang mungkin bersinggungan dengan kotak [x0,x1]x[z0,z1].
+    // Hasil berupa array bersama (jangan disimpan, jangan dipanggil bertingkat).
+    function queryColliders(x0, x1, z0, z1) {
+      if (!gridCells) return colliders; // saat dunia sedang dibangun
+      queryResult.length = 0;
+      queryStamp++;
+      const ix1 = gridIndex(x1), iz1 = gridIndex(z1);
+      for (let ix = gridIndex(x0); ix <= ix1; ix++) {
+        for (let iz = gridIndex(z0); iz <= iz1; iz++) {
+          const cell = gridCells[iz * GRID_N + ix];
+          for (let k = 0; k < cell.length; k++) {
+            const c = cell[k];
+            if (c._q !== queryStamp) {
+              c._q = queryStamp;
+              queryResult.push(c);
+            }
+          }
+        }
+      }
+      for (let k = 0; k < movingColliders.length; k++) queryResult.push(movingColliders[k]);
+      return queryResult;
+    }
+
     // Dorong lingkaran (pemain/zombie) keluar dari benda yang terlalu tinggi untuk dinaiki
     export function resolveColliders(pos, feetY, r) {
       let hit = false;
       const lim = feetY + STEP_H;
-      for (let i = 0; i < colliders.length; i++) {
-        const c = colliders[i];
+      const list = queryColliders(pos.x - r - 0.5, pos.x + r + 0.5, pos.z - r - 0.5, pos.z + r + 0.5);
+      for (let i = 0; i < list.length; i++) {
+        const c = list[i];
         if (c.t === 1) {
           if (c.top <= lim) continue;
           const dx = pos.x - c.x, dz = pos.z - c.z;
@@ -232,8 +290,9 @@ export const worldRng = mulberry32(20240607);
     export function getSupport(x, z, feetY) {
       const lim = feetY + STEP_H;
       let h = 0, obj = null, found = false;
-      for (let i = 0; i < colliders.length; i++) {
-        const c = colliders[i];
+      const list = queryColliders(x - 0.2, x + 0.2, z - 0.2, z + 0.2);
+      for (let i = 0; i < list.length; i++) {
+        const c = list[i];
         let t;
         if (c.t === 1) {
           const dx = x - c.x, dz = z - c.z;
@@ -256,8 +315,9 @@ export const worldRng = mulberry32(20240607);
 
     // Titik bebas untuk menaruh dekorasi / zombie (tidak di air, tidak di dalam benda apapun)
     export function blockedAtGround(x, z, r) {
-      for (let i = 0; i < colliders.length; i++) {
-        const c = colliders[i];
+      const list = queryColliders(x - r, x + r, z - r, z + r);
+      for (let i = 0; i < list.length; i++) {
+        const c = list[i];
         if (c.raft) continue;
         if (c.t === 1) {
           const rr = c.r + r;
@@ -1180,6 +1240,9 @@ export const worldRng = mulberry32(20240607);
         o.castShadow = !!o.userData.castShadow;
         o.receiveShadow = !!o.userData.ground;
       }));
+
+      // Semua collider sudah dibuat: bangun spatial grid untuk cek tabrakan cepat
+      buildColliderGrid();
 
       // Gabungkan semua benda statis polos (bukan instanced, bukan rumah/bukit yang bisa
       // memudar, bukan bertekstur) menjadi 2 mesh: permukaan tanah dan sisanya.

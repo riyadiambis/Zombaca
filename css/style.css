@@ -663,11 +663,14 @@
       background: rgba(255,255,255,0.22);
     }
 
+    /* Tombol khusus HP/tablet (jari sebagai penunjuk utama), tidak muncul di laptop */
     .touch-only-btn {
       display: none;
     }
-    body.touch-device .touch-only-btn {
-      display: flex;
+    @media (pointer: coarse) {
+      .touch-only-btn {
+        display: flex;
+      }
     }
 
     .round-glass-btn:active {
@@ -942,11 +945,13 @@
       z-index: 9;
     }
 
-    /* Joystick Virtual Mengambang Kiri Bawah */
+    /* Joystick Virtual Kiri Bawah */
     #joystick-zone {
-      position: fixed;
-      width: 120px;
-      height: 120px;
+      position: absolute;
+      bottom: 26px;
+      left: 26px;
+      width: 140px;
+      height: 140px;
       border-radius: 50%;
       background: var(--kaca-hud);
       border: 2px solid var(--kaca-garis);
@@ -956,13 +961,17 @@
       align-items: center;
       justify-content: center;
       touch-action: none;
-      z-index: 15;
+    }
+
+    /* Saat disentuh, joystick pindah ke titik jari (diatur dari controls.js) */
+    #joystick-zone.floating {
+      bottom: auto;
       transform: translate(-50%, -50%);
     }
 
     #joystick-knob {
-      width: 52px;
-      height: 52px;
+      width: 60px;
+      height: 60px;
       border-radius: 50%;
       background: linear-gradient(180deg, var(--limau), var(--hijau));
       border: 3px solid #FFFFFF;
@@ -971,27 +980,24 @@
       transform: translate(0px, 0px);
     }
 
-    /* Tombol Tembak & Lompat Kanan Bawah Melengkung (Ergonomis HP) */
+    /* Tombol Tembak & Lompat Kanan Bawah */
     .action-buttons {
-      position: fixed;
-      bottom: max(20px, env(safe-area-inset-bottom, 20px));
-      right: max(20px, env(safe-area-inset-right, 20px));
-      display: block;
-      width: 175px;
-      height: 140px;
-      pointer-events: none;
-      z-index: 15;
+      position: absolute;
+      bottom: 26px;
+      right: 26px;
+      display: flex;
+      align-items: flex-end;
+      gap: 16px;
+      pointer-events: auto;
     }
 
-    #btn-shoot {
-      position: absolute;
-      bottom: 0;
-      right: 0;
-      width: 88px;
-      height: 88px;
+    #btn-jump {
+      position: relative;
+      width: 78px;
+      height: 78px;
       border-radius: 50%;
-      background: linear-gradient(135deg, var(--pink) 0%, var(--oranye) 100%);
-      border: 4px solid #FFFFFF;
+      background: var(--kaca-hud);
+      border: 2px solid var(--kaca-garis);
       color: var(--teks);
       font-family: 'Fredoka', sans-serif;
       font-weight: 700;
@@ -1001,60 +1007,48 @@
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      box-shadow: 0 6px 0 #9D174D, 0 10px 25px rgba(244, 114, 182, 0.45);
-      transition: transform 0.12s ease, box-shadow 0.12s ease;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.35);
       touch-action: none;
-      pointer-events: auto;
-    }
-
-    /* Area sentuh (hitbox virtual) lebih besar dari visual agar mudah ditekan anak */
-    #btn-shoot::before {
-      content: '';
-      position: absolute;
-      inset: -14px;
-      border-radius: 50%;
-      pointer-events: auto;
-    }
-
-    #btn-shoot .tool-emoji {
-      font-size: 2.1rem;
-      line-height: 1;
-    }
-
-    #btn-jump {
-      position: absolute;
-      top: 0;
-      left: 10px;
-      width: 64px;
-      height: 64px;
-      border-radius: 50%;
-      background: var(--kaca-hud);
-      border: 2px solid var(--kaca-garis);
-      color: var(--teks);
-      font-family: 'Fredoka', sans-serif;
-      font-weight: 700;
-      font-size: 0.88rem;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      box-shadow: 0 6px 18px rgba(0,0,0,0.35);
-      touch-action: none;
-      pointer-events: auto;
-    }
-
-    #btn-jump::before {
-      content: '';
-      position: absolute;
-      inset: -12px;
-      border-radius: 50%;
-      pointer-events: auto;
     }
 
     #btn-jump:active {
       transform: scale(0.92);
       background: rgba(255,255,255,0.28);
+    }
+
+    #btn-shoot {
+      position: relative;
+      width: 104px;
+      height: 104px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--pink) 0%, var(--oranye) 100%);
+      border: 4px solid #FFFFFF;
+      color: var(--teks);
+      font-family: 'Fredoka', sans-serif;
+      font-weight: 700;
+      font-size: 1.05rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 8px 0 #9D174D, 0 12px 30px rgba(244, 114, 182, 0.5);
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+      touch-action: none;
+    }
+
+    /* Area sentuh lebih besar dari tombolnya agar mudah ditekan anak */
+    #btn-jump::before,
+    #btn-shoot::before {
+      content: '';
+      position: absolute;
+      inset: -12px;
+      border-radius: 50%;
+    }
+
+    #btn-shoot .tool-emoji {
+      font-size: 2.3rem;
+      line-height: 1.05;
     }
 
     #btn-shoot.in-range {
@@ -1459,9 +1453,7 @@
     .rotate-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(18, 16, 43, 0.95);
-      backdrop-filter: blur(24px);
-      -webkit-backdrop-filter: blur(24px);
+      background: rgba(18, 16, 43, 0.96);
       z-index: 3000;
       display: none;
       align-items: center;
@@ -1640,9 +1632,7 @@
       .btn-row {
         position: sticky;
         bottom: 0;
-        background: rgba(20, 16, 45, 0.85);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
+        background: rgba(20, 16, 45, 0.9);
         padding: 6px 8px;
         border-radius: 14px;
         gap: 8px;
@@ -1690,18 +1680,23 @@
         transform: translateX(-50%);
         padding: 4px 10px;
         gap: 6px;
-        max-width: min(42vw, 290px);
+        /* Sisa ruang di antara kolom kiri (mini map + bintang) dan 4 tombol kanan */
+        max-width: min(290px, calc(100vw - 428px - 2 * env(safe-area-inset-left, 0px)));
         z-index: 12;
       }
 
       .mission-emoji {
-        font-size: 1.5rem;
+        font-size: 1.3rem;
+      }
+
+      .tiles-container {
+        gap: 4px;
       }
 
       .letter-tile {
-        width: 38px;
-        height: 38px;
-        font-size: 1.3rem;
+        width: 34px;
+        height: 34px;
+        font-size: 1.2rem;
       }
 
       .round-progress-wrapper {
@@ -1740,35 +1735,69 @@
         font-size: 1rem !important;
       }
 
-      /* Tombol Aksi Kanan Bawah Melengkung */
+      /* Joystick: diam di kiri bawah, pindah ke titik jari saat disentuh */
+      #joystick-zone {
+        width: 120px;
+        height: 120px;
+        left: max(18px, env(safe-area-inset-left, 18px));
+        bottom: max(14px, env(safe-area-inset-bottom, 14px));
+      }
+
+      #joystick-knob {
+        width: 52px;
+        height: 52px;
+      }
+
+      /* Tombol Tembak 88px & Lompat 64px membentuk lengkungan di kanan bawah */
       .action-buttons {
-        bottom: max(12px, env(safe-area-inset-bottom, 12px));
-        right: max(12px, env(safe-area-inset-right, 12px));
-        width: 160px;
-        height: 125px;
-        z-index: 15;
+        display: block;
+        bottom: max(14px, env(safe-area-inset-bottom, 14px));
+        right: max(16px, env(safe-area-inset-right, 16px));
+        width: 156px;
+        height: 124px;
+        pointer-events: none;
       }
 
       #btn-shoot {
-        width: 84px;
-        height: 84px;
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        width: 88px;
+        height: 88px;
         font-size: 0.95rem;
+        pointer-events: auto;
+        box-shadow: 0 6px 0 #9D174D, 0 10px 25px rgba(244, 114, 182, 0.45);
       }
 
       #btn-shoot .tool-emoji {
-        font-size: 1.9rem;
+        font-size: 2rem;
       }
 
       #btn-jump {
-        width: 60px;
-        height: 60px;
+        position: absolute;
+        right: 92px;
+        bottom: 60px;
+        width: 64px;
+        height: 64px;
         font-size: 0.85rem;
-        left: 6px;
+        pointer-events: auto;
+      }
+
+      /* Petunjuk geser kamera: di bawah tengah, antara joystick dan tombol Lompat */
+      #cam-drag-zone-hint {
+        top: auto;
+        right: auto;
+        bottom: max(10px, env(safe-area-inset-bottom, 10px));
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 0.7rem;
+        padding: 3px 10px;
+        white-space: nowrap;
       }
 
       /* Toast & Selebrasi */
       #toast-msg {
-        top: 68px;
+        top: 108px; /* di bawah panel misi */
         font-size: 1rem;
         padding: 6px 16px;
       }
@@ -1796,6 +1825,93 @@
       }
       .album-emoji {
         font-size: 2.2rem;
+      }
+
+      /* Layar Level & Teman: ringkas supaya muat tanpa banyak menggulir */
+      .screen .subtitle[style] {
+        margin-top: 6px !important;
+        margin-bottom: 4px !important;
+      }
+
+      #level-cards .choice-card {
+        flex-direction: row;
+        align-items: center;
+        text-align: left;
+        gap: 8px;
+        padding: 6px 10px;
+      }
+
+      #level-cards .card-icon-box {
+        width: 42px;
+        height: 42px;
+        font-size: 0.95rem;
+        flex-shrink: 0;
+      }
+
+      #level-cards .card-title {
+        margin-top: 0;
+        font-size: 0.92rem;
+      }
+
+      #level-cards .card-desc {
+        display: none;
+      }
+
+      /* Judul + perkiraan waktu di baris atas, stepper + chip di baris bawah */
+      .target-count-section {
+        display: grid;
+        grid-template-columns: auto auto;
+        align-items: center;
+        justify-content: center;
+        column-gap: 16px;
+        row-gap: 0;
+      }
+
+      .target-count-section .subtitle[style] {
+        margin: 0 !important;
+        justify-self: end;
+      }
+
+      .target-count-section .playtime-estimate {
+        grid-column: 2;
+        grid-row: 1;
+        margin-top: 0;
+        justify-self: start;
+      }
+
+      .stepper-label {
+        font-size: 0.7rem;
+      }
+
+      .char-preview-canvas {
+        width: 52px;
+        height: 52px;
+      }
+
+      /* Topi dalam satu baris (geser ke samping bila tidak muat) */
+      .hat-bar {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        justify-content: flex-start;
+        gap: 6px;
+        margin: 4px 0;
+        padding-bottom: 2px;
+        scrollbar-width: none;
+      }
+
+      .hat-btn {
+        flex-shrink: 0;
+        font-size: 0.82rem;
+        padding: 4px 10px;
+      }
+
+      /* Tetap di tengah bila muat, bisa digeser bila tidak */
+      .hat-btn:first-child { margin-left: auto; }
+      .hat-btn:last-child { margin-right: auto; }
+
+      .btn-row .btn[style] {
+        font-size: 1.1rem !important;
+        padding: 8px 22px !important;
       }
     }
 

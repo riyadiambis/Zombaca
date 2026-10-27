@@ -13,6 +13,7 @@ import {
 import { playSound } from './audio.js';
 import { spawnPuffParticles } from './weapons.js';
 import { showToast } from './ui.js';
+import { mergeMeshes } from './merge.js';
 
 export const letterTextures = {};
 export let fontLoadedReady = false;
@@ -67,16 +68,16 @@ export let fontLoadedReady = false;
         // Lanjut jika browser tidak mendukung Font Loading API
       }
       ALLOWED_LETTERS.forEach(ltr => {
+        const old = letterTextures[ltr];
         letterTextures[ltr] = createLetterTexture(ltr);
+        // Material papan yang sudah ada cukup diganti teksturnya (dipakai bersama semua zombie)
+        if (boardMaterials[ltr]) {
+          boardMaterials[ltr].map = letterTextures[ltr];
+          boardMaterials[ltr].needsUpdate = true;
+        }
+        if (old) old.dispose();
       });
       fontLoadedReady = true;
-      // Update zombie yang sudah ada di layar
-      zombies.forEach(z => {
-        if (z.letter && letterTextures[z.letter]) {
-          z.boardMesh.material.map = letterTextures[z.letter];
-          z.boardMesh.material.needsUpdate = true;
-        }
-      });
     }
 
 
@@ -86,28 +87,81 @@ export function getLetterCanvasTexture(letter) {
   return letterTextures[letter];
 }
 
+    // Satu material papan per huruf, dipakai bersama semua zombie (texture dibuat sekali per huruf)
+    const boardMaterials = {};
+    export function getBoardMaterial(letter) {
+      if (!boardMaterials[letter]) {
+        boardMaterials[letter] = new THREE.MeshBasicMaterial({
+          map: getLetterCanvasTexture(letter),
+          transparent: true,
+          side: THREE.DoubleSide
+        });
+      }
+      return boardMaterials[letter];
+    }
+
     const tempParentQuat = new THREE.Quaternion();
 
     export function alignBillboardToCamera(boardMesh) {
       if (!boardMesh || !boardMesh.parent || !sceneRefs.camera) return;
-      boardMesh.parent.updateMatrixWorld();
-      boardMesh.parent.getWorldQuaternion(tempParentQuat);
-      tempParentQuat.invert();
+      // Induk papan (root zombie) berada langsung di scene, jadi quaternion lokalnya
+      // sama dengan quaternion dunia: tidak perlu updateMatrixWorld tiap frame.
+      tempParentQuat.copy(boardMesh.parent.quaternion).invert();
       boardMesh.quaternion.copy(tempParentQuat).multiply(sceneRefs.camera.quaternion);
     }
 
-    export function createCuteZombieMesh(initialLetter) {
-      const root = new THREE.Group();
-
+    // Geometry & material zombie dibuat SEKALI lalu dipakai bersama semua zombie.
+    // Badan+kepala digabung jadi 1 mesh, mata+pupil+senyum jadi 1 mesh.
+    let zombieRes = null;
+    function getZombieResources() {
+      if (zombieRes) return zombieRes;
       const zGreen = 0x86EFAC; // Hijau muda cerah ramah anak
       const zShirt = 0x38BDF8;
       const zPants = 0x6366F1;
+      const part = (geo, color, x, y, z, basic) => {
+        const mat = basic ? new THREE.MeshBasicMaterial({ color }) : new THREE.MeshLambertMaterial({ color });
+        const m = new THREE.Mesh(geo, mat);
+        m.position.set(x, y, z);
+        return m;
+      };
+      const bodyParts = [
+        part(new THREE.BoxGeometry(1.0, 1.1, 0.62), zShirt, 0, 1.28, 0),
+        part(new THREE.BoxGeometry(1.0, 0.95, 0.95), zGreen, 0, 2.38, 0)
+      ];
+      // Wajah di sumbu +Z lokal (mata besar bulat lucu & senyum), kepala di y = 2.38
+      const whiteGeo = new THREE.SphereGeometry(0.22, 12, 12);
+      const pupilGeo = new THREE.SphereGeometry(0.11, 10, 10);
+      const faceParts = [
+        part(whiteGeo, 0xFFFFFF, -0.26, 2.48, 0.48, true),
+        part(pupilGeo, 0x14112B, -0.26, 2.48, 0.64, true),
+        part(whiteGeo, 0xFFFFFF, 0.26, 2.48, 0.48, true),
+        part(pupilGeo, 0x14112B, 0.26, 2.48, 0.64, true),
+        part(new THREE.BoxGeometry(0.42, 0.12, 0.1), 0x14112B, 0, 2.14, 0.52, true)
+      ];
+      zombieRes = {
+        bodyGeo: mergeMeshes(bodyParts, null),
+        bodyMat: new THREE.MeshLambertMaterial({ vertexColors: true }),
+        faceGeo: mergeMeshes(faceParts, null),
+        faceMat: new THREE.MeshBasicMaterial({ vertexColors: true }),
+        legGeo: new THREE.BoxGeometry(0.4, 0.72, 0.4),
+        legMat: new THREE.MeshLambertMaterial({ color: zPants }),
+        armGeo: new THREE.BoxGeometry(0.35, 0.95, 0.35),
+        armMat: new THREE.MeshLambertMaterial({ color: zGreen }),
+        boardGeo: new THREE.PlaneGeometry(2.3, 2.3),
+        hintGeo: new THREE.RingGeometry(0.95, 1.35, 24),
+        hintMat: new THREE.MeshBasicMaterial({ color: 0xFACC15, side: THREE.DoubleSide, transparent: true, opacity: 0.85 })
+      };
+      [...bodyParts, ...faceParts].forEach(m => { m.geometry.dispose(); m.material.dispose(); });
+      return zombieRes;
+    }
+
+    export function createCuteZombieMesh(initialLetter) {
+      const R = getZombieResources();
+      const root = new THREE.Group();
 
       const leftLeg = new THREE.Group();
       leftLeg.position.set(-0.28, 0.72, 0);
-      const legGeo = new THREE.BoxGeometry(0.4, 0.72, 0.4);
-      const legMat = new THREE.MeshLambertMaterial({ color: zPants });
-      const lMesh = new THREE.Mesh(legGeo, legMat);
+      const lMesh = new THREE.Mesh(R.legGeo, R.legMat);
       lMesh.position.y = -0.36;
       lMesh.castShadow = true;
       leftLeg.add(lMesh);
@@ -117,56 +171,16 @@ export function getLetterCanvasTexture(letter) {
       rightLeg.add(lMesh.clone());
       root.add(leftLeg, rightLeg);
 
-      const body = new THREE.Mesh(
-        new THREE.BoxGeometry(1.0, 1.1, 0.62),
-        new THREE.MeshLambertMaterial({ color: zShirt })
-      );
-      body.position.y = 1.28;
+      // Badan + kepala (1 mesh) dan wajah (1 mesh)
+      const body = new THREE.Mesh(R.bodyGeo, R.bodyMat);
       body.castShadow = true;
-      root.add(body);
-
-      const head = new THREE.Group();
-      head.position.y = 2.38;
-      const headBox = new THREE.Mesh(
-        new THREE.BoxGeometry(1.0, 0.95, 0.95),
-        new THREE.MeshLambertMaterial({ color: zGreen })
-      );
-      headBox.castShadow = true;
-      head.add(headBox);
-
-      // Wajah Zombie di Sumbu +Z Lokal (Mata Besar Bulat Lucu & Senyum)
-      const whiteGeo = new THREE.SphereGeometry(0.22, 12, 12);
-      const whiteMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
-      const pupilGeo = new THREE.SphereGeometry(0.11, 10, 10);
-      const pupilMat = new THREE.MeshBasicMaterial({ color: 0x14112B });
-
-      const eyeL = new THREE.Mesh(whiteGeo, whiteMat);
-      eyeL.position.set(-0.26, 0.1, 0.48);
-      const pupL = new THREE.Mesh(pupilGeo, pupilMat);
-      pupL.position.set(-0.26, 0.1, 0.64);
-
-      const eyeR = new THREE.Mesh(whiteGeo, whiteMat);
-      eyeR.position.set(0.26, 0.1, 0.48);
-      const pupR = new THREE.Mesh(pupilGeo, pupilMat);
-      pupR.position.set(0.26, 0.1, 0.64);
-
-      // Senyum lucu di +Z
-      const smile = new THREE.Mesh(
-        new THREE.BoxGeometry(0.42, 0.12, 0.1),
-        new THREE.MeshBasicMaterial({ color: 0x14112B })
-      );
-      smile.position.set(0, -0.24, 0.52);
-
-      head.add(eyeL, pupL, eyeR, pupR, smile);
-      root.add(head);
+      const face = new THREE.Mesh(R.faceGeo, R.faceMat);
+      root.add(body, face);
 
       // Dua Tangan Zombie Terangkat ke Atas Memegang Papan Huruf
       const leftArm = new THREE.Group();
       leftArm.position.set(-0.72, 1.82, 0);
-      const armMesh = new THREE.Mesh(
-        new THREE.BoxGeometry(0.35, 0.95, 0.35),
-        new THREE.MeshLambertMaterial({ color: zGreen })
-      );
+      const armMesh = new THREE.Mesh(R.armGeo, R.armMat);
       armMesh.position.y = -0.38;
       leftArm.add(armMesh);
       leftArm.rotation.x = -Math.PI * 0.92;
@@ -180,21 +194,12 @@ export function getLetterCanvasTexture(letter) {
       root.add(leftArm, rightArm);
 
       // Papan Huruf Besar di Atas Kepala (Selalu Menghadap Kamera / Billboard)
-      const boardGeo = new THREE.PlaneGeometry(2.3, 2.3);
-      const boardMat = new THREE.MeshBasicMaterial({
-        map: letterTextures[initialLetter] || null,
-        transparent: true,
-        side: THREE.DoubleSide
-      });
-      const boardMesh = new THREE.Mesh(boardGeo, boardMat);
+      const boardMesh = new THREE.Mesh(R.boardGeo, getBoardMaterial(initialLetter));
       boardMesh.position.set(0, 4.15, 0);
       root.add(boardMesh);
 
       // Cahaya Kuning Bantuan Otomatis (15 detik)
-      const hintRing = new THREE.Mesh(
-        new THREE.RingGeometry(0.95, 1.35, 24),
-        new THREE.MeshBasicMaterial({ color: 0xFACC15, side: THREE.DoubleSide, transparent: true, opacity: 0.85 })
-      );
+      const hintRing = new THREE.Mesh(R.hintGeo, R.hintMat);
       hintRing.rotation.x = -Math.PI / 2;
       hintRing.position.y = 0.08;
       hintRing.visible = false;
@@ -206,13 +211,19 @@ export function getLetterCanvasTexture(letter) {
         rightLeg,
         leftArm,
         rightArm,
-        head,
         boardMesh,
         hintRing
       };
     }
 
+    // Hewan dibuat sekali per jenis sebagai cetakan, lalu di-clone (geometry & material dipakai bersama)
+    const animalTemplates = {};
     export function createCuteAnimalMesh(animalType) {
+      if (!animalTemplates[animalType]) animalTemplates[animalType] = buildAnimalTemplate(animalType);
+      return animalTemplates[animalType].clone();
+    }
+
+    function buildAnimalTemplate(animalType) {
       const group = new THREE.Group();
       if (animalType === 'kelinci') {
         const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.75, 1.1), new THREE.MeshLambertMaterial({ color: 0xFFFFFF }));
@@ -270,16 +281,26 @@ export function getLetterCanvasTexture(letter) {
 
     export function setZombieLetter(z, letter) {
       z.letter = letter;
-      if (letterTextures[letter]) {
-        z.boardMesh.material.map = letterTextures[letter];
-        z.boardMesh.material.needsUpdate = true;
-      }
+      z.boardMesh.material = getBoardMaterial(letter);
     }
 
     // SELALU ada minimal 2 zombie yang membawa huruf benar, dan minimal 1 di antaranya berada dalam jarak 40 unit dari pemain.
     export function ensureCorrectLetterAmongZombies() {
       if (zombies.length === 0) return;
       const needed = getNeededLetter();
+
+      // Jalur cepat tanpa alokasi (dipanggil setiap frame): aturan sudah terpenuhi
+      let matchCount = 0;
+      let closeMatch = false;
+      for (let i = 0; i < zombies.length; i++) {
+        const z = zombies[i];
+        if (z.letter !== needed) continue;
+        matchCount++;
+        const dx = z.x - playerState.x, dz = z.z - playerState.z;
+        if (dx * dx + dz * dz <= 1600) closeMatch = true;
+      }
+      if (matchCount >= 2 && closeMatch) return;
+
       let matches = zombies.filter(z => z.letter === needed);
 
       // Pastikan minimal 2 zombie membawa huruf benar
@@ -450,6 +471,7 @@ export function updateZombies(dt, isPlaying = true) {
 
   for (let i = 0; i < zombies.length; i++) {
     const z = zombies[i];
+    const prevX = z.x, prevZ = z.z;
     const dxToPlayer = playerState.x - z.x;
     const dzToPlayer = playerState.z - z.z;
     const distToPlayer = Math.hypot(dxToPlayer, dzToPlayer);
@@ -516,10 +538,25 @@ export function updateZombies(dt, isPlaying = true) {
 
     // Zombie Dilarang Masuk Air & Dilarang Keluar Pulau
     if (nearWater(z.x, z.z, 2.2)) {
-      const safeLand = findNearestLand(z.x, z.z);
-      const toSafeAngle = Math.atan2(safeLand.x - z.x, safeLand.z - z.z);
-      z.moveDirX = Math.sin(toSafeAngle);
-      z.moveDirZ = Math.cos(toSafeAngle);
+      if (!nearWater(prevX, prevZ, 2.2)) {
+        // Jangan masuk ke tepi air: kembali ke posisi sebelumnya lalu berbalik arah
+        z.x = prevX;
+        z.z = prevZ;
+        const backAngle = Math.atan2(-z.moveDirX, -z.moveDirZ) + (Math.random() - 0.5) * 1.2;
+        z.moveDirX = Math.sin(backAngle);
+        z.moveDirZ = Math.cos(backAngle);
+      } else {
+        // Sudah terlanjur di tepi air: cari daratan terdekat paling sering 1x per detik
+        // (findNearestLand sangat mahal, dulu dipanggil setiap frame)
+        z.landCheckTimer = (z.landCheckTimer || 0) - dt;
+        if (!z.safeLand || z.landCheckTimer <= 0) {
+          z.safeLand = findNearestLand(z.x, z.z);
+          z.landCheckTimer = 1.0;
+        }
+        const toSafeAngle = Math.atan2(z.safeLand.x - z.x, z.safeLand.z - z.z);
+        z.moveDirX = Math.sin(toSafeAngle);
+        z.moveDirZ = Math.cos(toSafeAngle);
+      }
     }
 
     // Zombie Labirin Terkunci di Labirin
